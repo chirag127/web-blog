@@ -179,23 +179,4 @@ graph TD
     H -->|Yes| J["Go directly to Part 24 (Remote Jobs)<br>and Part 25 (Immigration & Visas)"]
 ```
 
----
 
-## 6. AdSense Ready Placement Slots
-
-To prepare your blog for eventual monetization via Google AdSense, the codebase must conform to clean viewability layouts. We integrate dedicated, non-shifting CSS glassmorphic card containers where AdSense script tags can be injected seamlessly, preventing Cumulative Layout Shifts (CLS) which penalize SEO rankings:
-
-<div class="glass-card my-8 p-6 text-center border border-border bg-bg-card/20 min-h-[250px] flex flex-col justify-center items-center rounded-2xl">
-  <span class="text-xs font-semibold text-text-tertiary tracking-widest uppercase mb-2">Advertisement Slot (AdSense Ready)</span>
-  <p class="text-sm text-text-secondary max-w-sm mb-4">This space represents an optimized, non-shifting AdSense box conforming to Google's strict layout guidelines.</p>
-  {/* AdSense script placeholder
-  <ins class="adsbygoogle"
-       style="display:block; text-align:center;"
-       data-ad-layout="in-article"
-       data-ad-format="fluid"
-       data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-       data-ad-slot="XXXXXXXXXX"></ins>
-  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-  */}
-  <span class="px-3 py-1 rounded-full bg-accent/10 text-accent-light text-xs font-bold">CLS Insulated</span>
-</div>
