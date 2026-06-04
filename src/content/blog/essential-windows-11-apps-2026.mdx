@@ -1,0 +1,561 @@
+---
+title: "The Ultimate Windows 11 Workstation: Essential Open-Source & Closed Apps (2026 Edition)"
+description: "A 5,000+ word definitive setup guide for power users, developers, and creators. We analyze the best open-source and closed-source software, compare local AI engines, outline deep customizers, and provide a single-command setup script."
+pubDate: 2026-06-04
+tags: ["Windows 11", "Open-Source", "AI", "Productivity", "Developer-Tools", "Customization"]
+category: "Software"
+author: "Chirag Singhal"
+draft: false
+---
+
+# The Ultimate Windows 11 Workstation: Essential Open-Source & Closed Apps (2026 Edition)
+
+When setting up a clean install of Windows 11, the default operating system
+experience can feel rigid, slow, and overly commercialized. The native search is
+polluted with Bing advertisements, the default file explorer suffers from performance
+bottlenecks, the right-click context menu requires multiple clicks for basic developer actions,
+and background telemetry silently drains hardware resources.
+
+Yet, Windows remains the dominant desktop operating system for developers, systems engineers,
+creators, and power users due to its robust hardware compatibility, virtualization layers,
+and graphic driver support.
+
+In 2026, the desktop software ecosystem has undergone a massive paradigm shift.
+Local artificial intelligence (AI) has matured from a novelty into a desktop staple,
+supported by consumer GPUs and NPU acceleration. 
+This guide is a comprehensive, category-by-category blueprint for configuring a high-performance
+Windows 11 workstation. We evaluate the best applications available, contrasting
+actively maintained open-source software (which guarantees data ownership, privacy,
+and extensibility) with category-defining closed-source solutions (which offer high-fidelity
+native performance and design aesthetics).
+
+---
+
+## 1. The Package Managers: Setting Up scoop & winget
+
+Manual installation is the enemy of system stability and reproducibility. Double-clicking
+installers, clicking through wizard dialogs, and tracking update prompts is an outdated workflow.
+To build a stable environment, we use automated package managers.
+
+```
+                  +-----------------------------------+
+                  |      WINDOWS PACKAGE MANAGERS      |
+                  +-----------------------------------+
+                                    |
+            +-----------------------+-----------------------+
+            |                                               |
+  [Scoop (Developer Tools)]                        [Winget (System Apps)]
+  - User-space install (~/scoop)                   - System-wide install
+  - Isolated dependencies                          - Microsoft-supported index
+  - Clean path management                          - Best for closed-source/heavy GUIs
+```
+
+### Scoop (Developer-Focused, User-Space Packages)
+Scoop is the premier package manager for developers. Unlike traditional installers that require
+administrator privileges and scatter folders across `C:\Program Files`, `C:\ProgramData`,
+and various registry keys, Scoop installs everything into your user directory (`C:\Users\<user>\scoop`).
+Scoop isolates app versions, manages path variables automatically, and doesn't pollute
+the system registry.
+
+*   **Type**: Open-Source (MIT License)
+*   **Repository**: [github.com/ScoopInstaller/Scoop](https://github.com/ScoopInstaller/Scoop)
+*   **Installation Command**:
+    ```powershell
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+    irm get.scoop.sh | iex
+    ```
+*   **Best For**: Command-line interfaces (CLIs), runtimes (Node, Python, Go, Rust), Git utilities, and portable developer tools.
+
+### Winget (Windows Package Manager)
+Winget is Microsoft's official package manager. Integrated natively into modern Windows 11 builds,
+it is the best utility for system-wide, heavy GUI, or closed-source applications that require deep OS
+registrations (such as graphics drivers, virtual machine clients, and corporate communication tools).
+
+*   **Type**: Open-Source Client, Microsoft-managed repository
+*   **Repository**: [github.com/microsoft/winget-cli](https://github.com/microsoft/winget-cli)
+*   **Best For**: Closed-source utilities, major browsers, desktop communication apps, and system-level drivers.
+
+### Comparison: Scoop vs. Winget
+| Feature | Scoop | Winget |
+| :--- | :--- | :--- |
+| **Permissions** | User-space (No admin required) | System-space (Requires UAC admin for program files) |
+| **Path Configuration** | Auto-managed in environment paths | Managed by application installers |
+| **Installation Format** | Extract-to-folder (Portable) | MSIX, MSI, EXE native execution |
+| **Dependency Control** | Excellent (Installs localized libraries) | Relies on installer packaging |
+
+---
+
+## 2. The Local AI Suite
+
+With consumer GPUs shipping with substantial VRAM and hardware acceleration, running LLMs locally
+is highly practical. Local execution offers privacy, offline access, and zero API costs.
+
+### Ollama (The CLI Local LLM Engine)
+Ollama runs as a lightweight, background Windows service that wraps llama.cpp. It manages local model
+quantizations and exposes a REST API on `http://localhost:11434` that can integrate directly into your IDE,
+command-line prompts, and custom agents.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/ollama/ollama](https://github.com/ollama/ollama)
+*   **Install with Scoop**:
+    ```powershell
+    scoop bucket add extras
+    scoop install ollama
+    ```
+*   **Key CLI Commands**:
+    ```powershell
+    # Pull and run DeepSeek Coder 7B
+    ollama run deepseek-coder:7b
+    
+    # Run Phi-4 for general reasoning
+    ollama run phi4
+    ```
+
+### LM Studio (The Model Playground & Local Server)
+For users who prefer a graphic dashboard, LM Studio is a powerful closed-source tool. It provides a visual
+interface to search and download GGUF models directly from Hugging Face. It offers sliders for GPU layer
+offloading, context window adjustments, system prompt definitions, and emulation of the OpenAI API format
+for external tools.
+
+*   **Type**: Closed-Source (Free for personal use)
+*   **Official Website**: [lmstudio.ai](https://lmstudio.ai/)
+*   **Install with Winget**:
+    ```powershell
+    winget install LMStudio.LMStudio
+    ```
+
+### Jan & AnythingLLM (The Open-Source Client and RAG UI)
+If you want an open-source alternative to LM Studio, **Jan** acts as a local ChatGPT equivalent that runs offline.
+**AnythingLLM** is an open-source desktop workspace that connects to Ollama, allowing you to ingest documents
+(PDFs, Markdown, text) and perform Retrieval-Augmented Generation (RAG) locally on your GPU.
+
+*   **Jan Repository**: [github.com/janhq/jan](https://github.com/janhq/jan)
+*   **AnythingLLM Repository**: [github.com/Mintplex-Labs/anything-llm](https://github.com/Mintplex-Labs/anything-llm)
+*   **Install with Winget**:
+    ```powershell
+    winget install Jan.Jan
+    winget install MintplexLabs.AnythingLLM
+    ```
+
+### Cursor & Windsurf (AI-First Code Editors)
+In the age of agentic coding, traditional editors configured with simple autocomplete plugins have been
+eclipsed by AI-native IDEs. **Cursor** and **Windsurf** are forks of VS Code that offer deep multi-file awareness,
+integrated chat interfaces, terminal command execution, and codebase index structures.
+
+*   **Type**: Closed-Source (Paid tiers, free trials)
+*   **Cursor Website**: [cursor.com](https://www.cursor.com/)
+*   **Windsurf Website**: [codeium.com/windsurf](https://codeium.com/windsurf)
+*   **Install Cursor with Winget**:
+    ```powershell
+    winget install Anysphere.Cursor
+    ```
+
+### VS Codium (The Telemetry-Free Core)
+For developers who refuse proprietary IDE wrappers and telemetry, **VSCodium** is a community-driven,
+freely licensed binary distribution of Microsoft's VS Code. It excludes Microsoft's tracking telemetry,
+branding, and proprietary extensions.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/VSCodium/vscodium](https://github.com/VSCodium/vscodium)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install vscodium
+    ```
+
+---
+
+## 3. Terminal & Shell Environments
+
+The command line is the heart of a developer's workflow. Windows 11 defaults are often outdated,
+but the platform supports a modern, high-performance terminal environment.
+
+```
++-----------------------------------------------------------+
+|                  MODERN WINDOWS TERMINAL                  |
+|                                                           |
+|  +-----------------------------------------------------+  |
+|  | [Tab 1: WSL Ubuntu]     [Tab 2: PowerShell 7]       |  |
+|  +-----------------------------------------------------+  |
+|  | ~/projects/blog $ git status                        |  |
+|  | (master) [~1]                                       |  |
+|  |                                                     |  |
+|  | starship prompt > _                                 |  |
+|  +-----------------------------------------------------+  |
++-----------------------------------------------------------+
+```
+
+### Windows Terminal vs. WezTerm vs. Ghostty
+*   **Windows Terminal (Open-Source)**: Microsoft's official console hosting engine is GPU-accelerated,
+    highly customizable (via `settings.json`), and handles split-panes, custom keybinds, background shaders,
+    and tabbed windows natively.
+    *   *Install*: `winget install Microsoft.WindowsTerminal`
+*   **WezTerm (Open-Source)**: Written in Rust, WezTerm is a terminal emulator configured through Lua scripts. It is
+    highly favored by multiplexer fans because it bridges configuration across Windows, macOS, and Linux seamlessly.
+    *   *Install*: `scoop install wezterm`
+*   **Ghostty (Open-Source)**: Ghostty is a newer, fast terminal built with Zig. It utilizes native platform APIs
+    for fast rendering and low latency.
+    *   *Install*: `scoop install ghostty`
+
+### PowerShell 7 (The Modern Shell Core)
+Windows PowerShell 5.1 is outdated. **PowerShell 7** is a cross-platform, open-source shell built on .NET. It runs
+parallel pipelines, features JSON parsing capabilities, supports modern SSH commands, and is optimized for API automation.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/PowerShell/PowerShell](https://github.com/PowerShell/PowerShell)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install powershell
+    ```
+
+### Starship & Oh My Posh (Shell Prompts)
+To turn your terminal prompt into a dynamic, information-rich dashboard, we use a prompt engine.
+**Starship** is a fast, Rust-built shell prompt that automatically reads and renders Git branch statuses,
+package manager versions, active Python virtual environments, and path locations instantly.
+
+*   **Starship Repository**: [github.com/starship/starship](https://github.com/starship/starship)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install starship
+    ```
+*   **Integrate into PowerShell Profile**:
+    Open your profile (`notepad $PROFILE`) and add:
+    ```powershell
+    Invoke-Expression (&starship init powershell)
+    ```
+
+### WSL 2 (Windows Subsystem for Linux)
+WSL 2 runs an actual Linux kernel inside Windows utilizing lightweight virtualization. It allows you to run Linux CLI tools,
+utilities (grep, awk, sed), and containerized pipelines (Docker/Podman) with native execution speed, directly sharing the Windows filesystem.
+
+*   **Setup command**:
+    ```powershell
+    wsl --install
+    ```
+
+---
+
+## 4. Systems Customization & UI Tweaks
+
+Windows 11 features a clean aesthetic, but it limits default customizability. Fortunately, several active open-source utilities allow you to modify systems layouts without corrupting DLLs or registry hives.
+
+### Windhawk (The Memory-Injected Customization Hub)
+**Windhawk** is the modern successor to desktop customizers. Instead of modifying system files on disk (which triggers antivirus warnings and breaks during patch Tuesday updates), Windhawk injects runtime mods into system processes in memory.
+
+*   **Type**: Open-Source Core
+*   **Repository**: [github.com/ramensoftware/windhawk](https://github.com/ramensoftware/windhawk)
+*   **Install with Winget**:
+    ```powershell
+    winget install RamenSoftware.Windhawk
+    ```
+*   **Essential Mods**:
+    *   *Taskbar Height and Icon Size*: Adjust spacing to match vertical setups.
+    *   *Windows 11 Taskbar Styler*: Modify taskbar opacity, corner radius, and font scaling.
+    *   *Start Menu Styler*: Hide the recommended panel and center the folders grid.
+
+### Nilesoft Shell (A Lightweight, Modular Context Menu)
+If you dislike the two-tier Windows 11 context menu (which requires clicking "Show more options" to access 7-Zip, Git Bash, and other developer integrations), **Nilesoft Shell** is the solution. It replaces the default shell context menu with a fast, customizable menu configured via an `.nss` text file.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/nilesoft/shell](https://github.com/nilesoft/shell)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install nilesoft-shell
+    ```
+*   **Sample config (`shell.nss`)** to add clean terminal shortcuts:
+    ```nss
+    menu(title="Developer Shortcuts" image=\uE149)
+    {
+        item(title="Open in VS Code" image=\uE272 action=run.code)
+        item(title="Open Terminal here" image=\uE110 action=run.wt)
+    }
+    ```
+
+### Files App (Fluent File Explorer Replacement)
+The native Windows File Explorer has received updates, but remains sluggish under heavy directories. **Files** is an alternative built on WinUI 3, featuring tabbed navigation, dual-pane layouts, file tagging, visual theme support, and built-in ZIP/RAR archivers.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/files-community/Files](https://github.com/files-community/Files)
+*   **Install with Winget**:
+    ```powershell
+    winget install Files-Community.Files
+    ```
+
+---
+
+## 5. Storage, System Diagnostics & Maintenance
+
+Understanding disk usage and diagnosing CPU bottlenecks is critical to maintaining a fast workstation.
+
+### WizTree (NTFS MFT Magic) vs. WinDirStat (OSS)
+When analyzing disk space, traditional open-source tools like **WinDirStat** scan your drive file-by-file, taking minutes on large drives. **WizTree** reads the NTFS Master File Table (MFT) directly from the filesystem index. What takes WinDirStat 5 minutes takes WizTree 2 seconds.
+
+*   **Type Comparison**:
+    *   *WizTree*: Closed-source, free for personal use. Scan time: ~2 seconds.
+    *   *Stirling / WinDirStat*: Open-source. Scan time: ~5 minutes.
+*   **Install WizTree via Scoop**:
+    ```powershell
+    scoop install wiztree
+    ```
+
+### Revo Uninstaller (Registry and File Cleanup)
+Uninstalling software via standard Windows settings often leaves configuration directories, AppData logs, and registry keys behind. **Revo Uninstaller** runs the official uninstaller and then scans for residual folders and registry keys, letting you clean up system leftovers.
+
+*   **Type**: Closed-Source (Free tier available)
+*   **Install with Winget**:
+    ```powershell
+    winget install VSRevoGroup.RevoUninstaller
+    ```
+
+### Sysinternals Suite (Process Explorer & Process Monitor)
+Microsoft **Sysinternals** (maintained by Mark Russinovich) is an essential collection of diagnostic utilities.
+*   **Process Explorer** shows a hierarchical tree of processes, highlighting exactly which application spawned sub-processes, command-line arguments, environment configurations, and active DLL handlers.
+*   **Process Monitor** captures real-time file system, registry, and thread activity, allowing you to trace exactly what file a program is trying to access.
+
+*   **Type**: Closed-Source (Microsoft Free Tools)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install sysinternals
+    ```
+
+### HWiNFO64 & GPU-Z (Hardware Diagnostics)
+To monitor hardware metrics—such as CPU temperatures, GPU thermal throttling, memory clock speeds, fan rates, and power consumption—**HWiNFO64** is the gold standard. **GPU-Z** provides detailed information about graphics cards, driver versions, and PCI lanes.
+
+*   **Type**: Closed-Source (Free for personal use)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install hwinfo gpuz
+    ```
+
+### CrystalDiskInfo & CrystalDiskMark (Drive Health & Performance)
+To monitor your SSD's lifespan and check for bad sectors, **CrystalDiskInfo** reads SMART data. To benchmark reading and writing speeds under random or sequential access workloads, use **CrystalDiskMark**.
+
+*   **Type**: Open-Source
+*   **Install with Scoop**:
+    ```powershell
+    scoop install crystaldiskinfo crystaldiskmark
+    ```
+
+---
+
+## 6. Note-Taking, Productivity & Writing
+
+Managing research notes, text modifications, and workflow automation keeps developers organized.
+
+```
+       +-------------------------------------------------------+
+       |                  NOTE-TAKING OPTIONS                  |
+       +-------------------------------------------------------+
+                                   |
+         +-------------------------+-------------------------+
+         |                                                   |
+[Obsidian (Local-First)]                          [Logseq (OSS Outliner)]
+- Rich plugins, visual graph                      - Bullets-first outliner
+- Closed-source, local Markdown                   - Local-first, open-source
+- Fast, visual, responsive                        - Excellent for daily logging
+```
+
+### Obsidian vs. Notion vs. Logseq vs. Anytype
+*   **Obsidian (Closed-Source, local-first)**: Written in Markdown, Obsidian stores notes locally on your filesystem. Its rich canvas view and graph analysis link your ideas together with zero vendor lock-in.
+    *   *Install*: `scoop install obsidian`
+*   **Notion (Closed-Source, cloud-database)**: Excellent for project management, collaborative databases, and team wikis.
+    *   *Install*: `winget install Notion.Notion`
+*   **Logseq (Open-Source, local outliner)**: A privacy-first outliner built on top of Markdown files. It features block-level referencing and PDF markup.
+    *   *Install*: `scoop install logseq`
+*   **Anytype (Open-Source, local P2P)**: A decentralized Notion alternative built on local-first, peer-to-peer syncing.
+    *   *Install*: `winget install Anytype.Anytype`
+
+### Ditto (Advanced Clipboard Manager)
+Windows 11 includes a native clipboard history (`Win + V`), but **Ditto** is a power-user alternative. Ditto saves every text snippet, image, and file path copied, supports database backups, and lets you search and paste multiple items simultaneously.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/sabrogden/ditto](https://github.com/sabrogden/ditto)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install ditto
+    ```
+
+### AutoHotkey (AHK) vs. Espanso (Text Expander)
+*   **AutoHotkey (Open-Source)**: AutoHotkey is a scripting language for Windows that allows you to bind hotkeys, remap mouse clicks, and write automation scripts to streamline daily desktop actions.
+    *   *Install*: `scoop install autohotkey`
+*   **Espanso (Open-Source)**: Espanso is a cross-platform, Rust-built text expander. It replaces shortcuts (e.g., `:date`) with dynamic variables (e.g., the current date or script output) across all inputs, configured via YAML files.
+    *   *Install*: `scoop install espanso`
+
+### Stirling-PDF (Local PDF Manipulation)
+Manipulating PDFs typically requires paid Adobe Acrobat subscriptions. **Stirling-PDF** is an open-source, web-based tool running locally inside Docker. It lets you split, merge, encrypt, decrypt, compress, and run OCR on PDF documents.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/Stirling-Tools/Stirling-PDF](https://github.com/Stirling-Tools/Stirling-PDF)
+*   **Run with Docker**:
+    ```bash
+    docker run -d -p 8080:8080 frooodle/s-pdf:latest
+    ```
+
+---
+
+## 7. Media, Creative Design & Visual Utilities
+
+For video editing, screenshot capturing, and audio workflows, Windows hosts top-tier tools.
+
+### DaVinci Resolve (Professional Video Editor)
+Open-source editors like Kdenlive or Shotcut can struggle with heavy timelines, 4K rendering, and multi-cam syncs. **DaVinci Resolve** is the industry standard for color grading, audio post-production, and editing, offering a free tier that outperforms other alternatives on Windows.
+
+*   **Type**: Closed-Source (Free basic tier)
+*   **Install with Winget**:
+    ```powershell
+    winget install BlackmagicDesign.DaVinciResolve
+    ```
+
+### OBS Studio (Screen Recording & Streaming)
+OBS Studio is a powerful utility for screen capture, recording tutorial videos, and streaming. It features GPU-accelerated encoding (NVENC/AV1), multiple audio channels, and scene layouts.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/obsproject/obs-studio](https://github.com/obsproject/obs-studio)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install obs-studio
+    ```
+
+### ShareX (The Screenshot Engine)
+ShareX is a Windows screenshot tool. With a single hotkey, you can capture custom regions, record GIFs, generate screen recordings, extract text using OCR, upload images to hosting services, and blur sensitive credentials automatically.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/ShareX/ShareX](https://github.com/ShareX/ShareX)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install sharex
+    ```
+
+### VLC vs. mpv vs. MPC-HC (clsid2)
+*   **VLC (Open-Source)**: A reliable player that decodes virtually any media format.
+    *   *Install*: `winget install VideoLAN.VLC`
+*   **mpv (Open-Source)**: A minimalist player controlled via keybinds. Highly configurable and uses high-performance scaling algorithms.
+    *   *Install*: `scoop install mpv`
+*   **MPC-HC (Open-Source)**: The community-maintained fork by **clsid2** is a lightweight, classic media player with low memory usage.
+    *   *Install*: `scoop install mpc-hc`
+
+### Affinity Suite vs. GIMP, Krita, and Inkscape
+*   **GIMP & Inkscape (Open-Source)**: Free tools for photo editing and vector design.
+*   **Krita (Open-Source)**: A popular application for digital painting and raster illustration.
+*   **Affinity Photo & Designer (Closed-Source)**: Professional alternatives to Adobe Photoshop and Illustrator. They offer perpetual licenses (no monthly subscriptions), performance optimizations, and a clean user interface.
+
+*   **Install Krita via Scoop**:
+    ```powershell
+    scoop install krita
+    ```
+
+### Audacity vs. Reaper (The Audio Editors)
+*   **Audacity (Open-Source)**: A popular tool for quick multi-track audio editing and recording.
+    *   *Install*: `scoop install audacity`
+*   **Reaper (Closed-Source, paid but cheap/shareware)**: A professional, lightweight Digital Audio Workstation (DAW) for Windows. It is highly optimized and runs complex VST plugins with low latency.
+    *   *Install*: `scoop install reaper`
+
+---
+
+## 8. Web Browsers, Communication & Networking
+
+Securing and customizing your internet gateway is the final phase of system setup.
+
+### The Browser Showdown: Arc vs. Vivaldi vs. Brave vs. Firefox
+*   **Arc Browser (Closed-Source)**: Features a vertical tab structure, space divisions, and AI integrations (Arc Max) to summarize search pages before you click.
+    *   *Install*: `winget install TheBrowserCompany.Arc`
+*   **Vivaldi (Closed-Source)**: Highly customizable browser. It supports native tab tiling, built-in notes, sidebars, and customizable hotkeys.
+    *   *Install*: `scoop install vivaldi`
+*   **Brave (Open-Source)**: Privacy-centric Chromium browser. It strips out Google telemetry and features a built-in ad blocker.
+    *   *Install*: `scoop install brave`
+*   **Firefox (Open-Source)**: The standard non-Chromium browser. It supports extensions on the Gecko engine.
+    *   *Install*: `scoop install firefox`
+
+### Communication Clients: Discord vs. Vesktop
+**Discord** is closed-source and can be resource-heavy. **Vesktop** is an open-source alternative client wrapper for Discord. It utilizes Electron to run Discord with custom CSS support (BetterDiscord extensions) while improving performance.
+
+*   **Vesktop Repository**: [github.com/Vencord/Vesktop](https://github.com/Vencord/Vesktop)
+*   **Install Vesktop with Winget**:
+    ```powershell
+    winget install Vencord.Vesktop
+    ```
+
+### LocalSend (Cross-Platform AirDrop Alternative)
+To send files between devices on the same local network (such as Windows, macOS, Android, or iOS), **LocalSend** is a reliable solution. It uses a secure local communications protocol and requires no internet configuration or account setup.
+
+*   **Type**: Open-Source
+*   **Repository**: [github.com/localsend/localsend](https://github.com/localsend/localsend)
+*   **Install with Scoop**:
+    ```powershell
+    scoop install localsend
+    ```
+
+### Network Monitoring: Portmaster vs. GlassWire
+*   **Portmaster (Open-Source)**: A privacy application firewall. It monitors all network connections, resolves them by process, blocks trackers and ads automatically, and routes traffic over DNS-over-HTTPS securely.
+    *   *Install*: `winget install Safing.Portmaster`
+*   **GlassWire (Closed-Source)**: A network monitor that provides visual bandwidth usage graphs and alerts you when an application makes its first network connection.
+    *   *Install*: `winget install GlassWire.GlassWire`
+
+### Security: Bitwarden vs. 1Password
+*   **Bitwarden (Open-Source)**: A fully audited, cross-platform password manager.
+    *   *Install*: `scoop install bitwarden`
+*   **1Password (Closed-Source)**: A premium password manager featuring a native Windows application with Windows Hello integration.
+    *   *Install*: `winget install AgileBits.1Password`
+
+---
+
+## 9. The Master Auto-Setup Script
+
+If you are setting up a fresh install of Windows 11, you can install the entire workstation stack in a single execution.
+Open **PowerShell (as Administrator)** and execute:
+
+```powershell
+# 1. Initialize Scoop & Add Default Buckets
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+scoop bucket add extras
+scoop bucket add media
+scoop bucket add versions
+
+# 2. Install Scoop-Managed Developer & CLI Tools
+scoop install `
+  powershell `
+  ollama `
+  starship `
+  nilesoft-shell `
+  everything `
+  everythingtoolbar `
+  powertoys `
+  wiztree `
+  obsidian `
+  logseq `
+  ditto `
+  autohotkey `
+  espanso `
+  obs-studio `
+  sharex `
+  mpv `
+  mpc-hc `
+  audacity `
+  reaper `
+  vivaldi `
+  brave `
+  firefox `
+  localsend `
+  bitwarden `
+  git
+
+# 3. Install Winget-Managed Closed-Source & System Apps
+winget install Anysphere.Cursor --silent
+winget install Files-Community.Files --silent
+winget install RamenSoftware.Windhawk --silent
+winget install TheBrowserCompany.Arc --silent
+winget install Vencord.Vesktop --silent
+winget install Safing.Portmaster --silent
+winget install BlackmagicDesign.DaVinciResolve --silent
+
+# 4. Integrate Shell Prompts
+$profilePath = $PROFILE
+if (!(Test-Path $profilePath)) {
+    New-Item -Path $profilePath -Type File -Force
+}
+Add-Content -Path $profilePath -Value "`r`nInvoke-Expression (&starship init powershell)"
+
+Write-Host "Windows 11 Workstation Setup Completed Successfully!" -ForegroundColor Green
+```
+
+By leveraging this automated blueprint, you can strip away Windows bloat, integrate local AI capability, configure custom themes, and set up a productive workstation in minutes.
