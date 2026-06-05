@@ -1,0 +1,1360 @@
+---
+title: "HP Pavilion 14-dv2077TU as a Windows Home Server: The Complete 2026 Guide"
+description: "A step-by-step guide to turning your HP Pavilion 14-dv2077TU (i5-1235U, 16GB DDR4 dual-channel) into a full-featured Windows home server—without wiping Windows—hosting Docker services, Cloudflare tunnels, Ollama, Open WebUI, Odysseus AI, Nextcloud, Vaultwarden, and more."
+pubDate: 2026-06-05
+tags:
+  [
+    "Home-Server",
+    "Windows",
+    "WSL2",
+    "Docker",
+    "Cloudflare",
+    "Ollama",
+    "Local-AI",
+    "Odysseus",
+    "Self-Hosting",
+    "HP-Pavilion",
+  ]
+category: "Engineering"
+author: "Chirag Singhal"
+draft: false
+---
+
+# HP Pavilion 14-dv2077TU as a Windows Home Server: The Complete 2026 Guide
+
+So you have an old HP Pavilion 14-dv2077TU sitting around. It has an Intel
+Core i5-1235U with 10 cores (2 P-cores + 8 E-cores, 12 threads), 16 GB of
+DDR4-3200 running in dual-channel mode, a 256 GB NVMe SSD, and Intel Iris Xe
+integrated graphics. It runs Windows 11 Home, and you do not want to wipe it.
+
+You want to turn it into a home server while keeping the ability to open the
+lid and use it like a normal laptop whenever you need.
+
+This guide shows you exactly how to do that—end to end. No dual-boot. No
+OS reinstall. No open router ports.
+
+---
+
+## Hardware Snapshot: What You Are Working With
+
+| Attribute          | Specification                                          |
+| :----------------- | :----------------------------------------------------- |
+| **Model**          | HP Pavilion 14-dv2077TU                                |
+| **CPU**            | Intel Core i5-1235U (10 cores / 12 threads, 4.4 GHz)  |
+| **RAM**            | 16 GB DDR4-3200 dual-channel (~51.2 GB/s bandwidth)    |
+| **iGPU**           | Intel Iris Xe Graphics (80 EUs, shared memory)         |
+| **Storage**        | 256 GB PCIe NVMe SSD                                   |
+| **TDP**            | 15 W base / 55 W boost                                 |
+| **Idle power draw**| ~8–12 W (lid closed, plugged in, server workload)     |
+| **OS**             | Windows 11 Home (pre-activated, kept as-is)            |
+
+The i5-1235U's dual-channel DDR4 provides ~51 GB/s of memory bandwidth.
+This directly controls how fast local AI models generate tokens on CPU—a
+concept we cover in detail in the Local AI section.
+
+The Iris Xe GPU has 80 EUs but shares memory with the CPU. For AI inference,
+it adds only modest acceleration for very small quantized models via OpenVINO
+or DirectML; the CPU path through Ollama is more predictable and battle-tested
+for this hardware tier.
+
+---
+
+## Architecture Overview
+
+Before touching a single command, understand the layered architecture we
+will build:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  INTERNET / YOUR DEVICES                     │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTPS (no open ports)
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│             CLOUDFLARE EDGE (Zero Trust Tunnel)             │
+│        yourdomain.com → routed to local tunnel daemon       │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ Encrypted outbound tunnel
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              WINDOWS 11 HOST (HP Pavilion)                  │
+│  cloudflared.exe (Windows Service)                          │
+│  WSL Port-Forward Script (Scheduled Task)                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ localhost bridge
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  WSL2 UBUNTU LAYER                          │
+│  Docker Engine (native, ~80 MB idle)                        │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────────┐  │
+│  │ Caddy RP │ │ Portainer│ │ Nextcloud │ │ Vaultwarden │  │
+│  └──────────┘ └──────────┘ └───────────┘ └─────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────────┐  │
+│  │  Ollama  │ │Open WebUI│ │  Odysseus │ │   Flowise   │  │
+│  └──────────┘ └──────────┘ └───────────┘ └─────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────────┐  │
+│  │  Qdrant  │ │ Uptime K │ │  Immich   │ │    n8n      │  │
+│  └──────────┘ └──────────┘ └───────────┘ └─────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Part 1: Windows Configuration for Server Use
+
+### 1.1 Enable Hardware Virtualization (Intel VT-x)
+
+WSL2 requires hardware virtualization enabled in firmware.
+
+1. Shut down completely. Press power, then tap **Esc** → **F10** to enter BIOS.
+2. Navigate to **System Configuration** → **Virtualization Technology**.
+3. Set **Intel Virtualization Technology** → **Enabled**.
+4. Set **Intel VT-d** → **Enabled**.
+5. Press **F10** → **Yes** to save and reboot.
+
+Verify in Windows: `Ctrl + Shift + Esc` → **Performance** → **CPU** →
+confirm **Virtualization: Enabled**.
+
+### 1.2 Keep Windows Awake: Lid & Sleep Settings
+
+By default, closing the lid suspends the laptop—killing all your containers.
+
+**Via Control Panel** (most reliable on Windows Home):
+1. `Win + R` → `powercfg.cpl` → **Choose what closing the lid does**.
+2. Set both **On battery** and **Plugged in** to **Do nothing**.
+3. Back on Power Options → **Change when the computer sleeps**.
+4. Set **Put the computer to sleep** to **Never** for both states.
+
+**Via PowerShell** (Administrator):
+```powershell
+# Disable sleep on AC power
+powercfg /change standby-timeout-ac 0
+
+# Lid close = do nothing (AC)
+powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0
+
+# Lid close = do nothing (DC/battery)
+powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0
+
+# Apply the plan
+powercfg /setactive SCHEME_CURRENT
+```
+
+### 1.3 Disable the Screen While Server Is Running
+
+When you want to use the laptop as a headless server with lid open, you can
+turn off only the display without sleeping:
+
+```powershell
+# Turn display off immediately (keeps CPU and network active)
+powercfg /change monitor-timeout-ac 1
+```
+
+Or press `Win + Ctrl + Shift + B` to blank the display on demand without
+triggering sleep.
+
+### 1.4 Manage Windows Update Restarts
+
+Windows Home forces restarts automatically. Minimize disruption:
+
+**Set Active Hours** (prevents forced restarts during your configured window):
+1. **Settings** → **Windows Update** → **Advanced options** → **Active hours**
+   → **Manual** → Set your usage window (e.g., 06:00–23:00).
+
+**Pause updates during critical deployments**:
+1. **Settings** → **Windows Update** → **Pause for 5 weeks**.
+
+**Restart reminder** (instead of forced restart):
+```powershell
+# Notify before restart, never restart automatically
+# (Registry tweak for Windows Home without gpedit)
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" `
+  /v NoAutoRebootWithLoggedOnUsers /t REG_DWORD /d 1 /f
+```
+
+### 1.5 Configure Auto-Login After a Reboot
+
+If the server reboots from a power failure or update, it will sit at the
+Windows login screen—your containers stay dead.
+
+Use Microsoft Sysinternals **Autologon** (official, free):
+
+```powershell
+# Download via winget
+winget install --id Microsoft.Sysinternals.AutoLogon -e
+
+# Or download manually from:
+# https://learn.microsoft.com/en-us/sysinternals/downloads/autologon
+```
+
+Run `Autologon64.exe` as Administrator → enter your username and password →
+click **Enable**. The password is encrypted in the Windows registry. On next
+boot, Windows proceeds directly to the desktop.
+
+---
+
+## Part 2: WSL2 and Docker Engine Setup
+
+### 2.1 Install WSL2 with Ubuntu
+
+Open PowerShell as Administrator:
+
+```powershell
+# Install WSL2 with Ubuntu (default)
+wsl --install -d Ubuntu
+
+# Set WSL2 as default version
+wsl --set-default-version 2
+```
+
+Restart when prompted. Ubuntu will open a setup terminal—create your Linux
+username (e.g., `serveradmin`) and a strong password.
+
+Verify:
+```powershell
+wsl --list --verbose
+# Should show: Ubuntu   Running   2
+```
+
+### 2.2 Configure WSL2 Resource Limits (`.wslconfig`)
+
+Without limits, WSL2 can consume up to 50% of your RAM. On a 16 GB laptop
+you also need memory for the Windows host.
+
+Press `Win + R` → type `notepad %USERPROFILE%\.wslconfig` → create/edit:
+
+```ini
+[wsl2]
+# Allocate 10 GB to the Linux VM (leaves 6 GB for Windows processes)
+memory=10GB
+
+# Use all 10 physical + efficiency cores for server workloads
+processors=10
+
+# 4 GB swap inside Linux to handle memory spikes gracefully
+swap=4GB
+
+# Bridge WSL2 ports to Windows localhost automatically
+localhostForwarding=true
+
+# Reduce disk bloat—reclaim freed space automatically
+[experimental]
+autoMemoryReclaim=gradual
+```
+
+Apply:
+```powershell
+wsl --shutdown
+# Then reopen Ubuntu
+```
+
+### 2.3 Enable systemd Inside WSL2
+
+Modern WSL2 releases (version 0.67.6+) support systemd natively.
+Without it, Docker requires manual startup.
+
+Inside Ubuntu:
+```bash
+sudo nano /etc/wsl.conf
+```
+
+Add:
+```ini
+[boot]
+systemd=true
+
+[network]
+# Fix DNS issues when switching Wi-Fi networks
+generateResolvConf=false
+```
+
+Exit, then from PowerShell:
+```powershell
+wsl --shutdown
+```
+
+Reopen Ubuntu. Verify:
+```bash
+systemctl status
+# Should show "running" state
+```
+
+Fix static DNS (prevents DNS failures when VPN or Wi-Fi changes):
+```bash
+sudo rm /etc/resolv.conf
+echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+sudo chattr +i /etc/resolv.conf  # Prevent WSL from overwriting it
+```
+
+### 2.4 Install Docker Engine Natively Inside WSL2
+
+**Do not use Docker Desktop.** It adds 1.5–2.5 GB of idle RAM overhead from
+its GUI process, helper VMs, and service daemons.
+
+Installing Docker Engine directly inside WSL2 Ubuntu costs **< 100 MB at
+idle** and integrates cleanly with systemd.
+
+Inside the Ubuntu WSL2 terminal:
+
+```bash
+# 1. Remove old conflicting packages
+sudo apt-get remove -y docker.io docker-doc podman-docker containerd runc
+
+# 2. Install prerequisites
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+# 3. Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# 4. Register the apt repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) \
+  signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 5. Install Docker Engine + Compose plugin
+sudo apt-get update
+sudo apt-get install -y \
+  docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+
+# 6. Run Docker without sudo
+sudo usermod -aG docker $USER
+
+# 7. Enable and start Docker via systemd
+sudo systemctl enable docker
+sudo systemctl start docker
+```
+
+Close and reopen the terminal to apply the group membership.
+
+```bash
+# Verify
+docker --version
+docker compose version
+```
+
+Configure log rotation to prevent disk bloat:
+```bash
+sudo nano /etc/docker/daemon.json
+```
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+```
+
+```bash
+sudo systemctl restart docker
+```
+
+---
+
+## Part 3: Directory Layout and Docker Compose Structure
+
+A clean directory layout prevents data loss and makes backups trivial.
+We store everything inside the WSL2 Linux filesystem—**never** on
+`/mnt/c/` (Windows drives). Cross-OS I/O through the 9P translation layer
+drops throughput to 10–30% of native NVMe speeds.
+
+```bash
+mkdir -p ~/server/{caddy,portainer,nextcloud,vaultwarden,ollama,\
+open-webui,odysseus,flowise,qdrant,uptime-kuma,immich,n8n,\
+nginx-proxy-manager,prometheus,grafana}
+```
+
+Create your central compose file:
+```bash
+nano ~/server/docker-compose.yml
+```
+
+The complete compose file is below. Deploy services incrementally—start with
+the reverse proxy and management layer, then add services one by one.
+
+---
+
+## Part 4: Cloudflare Tunnel — Secure Public Access Without Opening Ports
+
+Cloudflare Tunnel creates an **outbound-only encrypted connection** from your
+laptop to Cloudflare's edge. No port forwarding on your router. No exposed
+firewall ports. Your home IP stays private. Cloudflare handles HTTPS
+certificates automatically.
+
+### 4.1 Install cloudflared on Windows
+
+```powershell
+# Install via winget (recommended)
+winget install --id Cloudflare.cloudflared -e
+```
+
+Restart PowerShell after installation.
+
+### 4.2 Authenticate and Create Your Tunnel
+
+```powershell
+# Authenticate (opens browser → select your domain)
+cloudflared tunnel login
+
+# Create the tunnel (saves credentials JSON automatically)
+cloudflared tunnel create home-server
+```
+
+Note the **Tunnel UUID** printed in the output.
+
+### 4.3 Create the Tunnel Config File
+
+Create `C:\Server\cloudflared-config.yml`:
+
+```yaml
+tunnel: <YOUR_TUNNEL_UUID>
+credentials-file: C:\Users\<YOUR_USERNAME>\.cloudflared\<TUNNEL_UUID>.json
+
+ingress:
+  # Main reverse proxy — routes all subdomain traffic
+  - hostname: "*.yourdomain.com"
+    service: http://localhost:80
+
+  # Direct route examples (optional, if bypassing Caddy)
+  - hostname: ai.yourdomain.com
+    service: http://localhost:8084
+
+  - hostname: files.yourdomain.com
+    service: http://localhost:8080
+
+  # Catch-all required by cloudflared
+  - service: http_status:404
+```
+
+### 4.4 Route DNS Records
+
+```powershell
+# Create a wildcard CNAME in Cloudflare DNS pointing to the tunnel
+cloudflared tunnel route dns home-server "*.yourdomain.com"
+
+# Route individual subdomains explicitly if you prefer
+cloudflared tunnel route dns home-server yourdomain.com
+```
+
+### 4.5 Install cloudflared as a Windows Service
+
+This makes the tunnel start automatically with Windows—survives reboots
+without any user action:
+
+```powershell
+# Install as Windows service
+cloudflared --config C:\Server\cloudflared-config.yml service install
+
+# Start now
+Start-Service cloudflared
+
+# Verify it is running
+Get-Service cloudflared
+```
+
+---
+
+## Part 5: Auto-Start WSL2 and Docker on Boot
+
+WSL2 only starts when a user opens a terminal. We use Windows Task Scheduler
+to start it automatically after login.
+
+### 5.1 Create the Startup Script
+
+Create `C:\Server\start-server.bat`:
+
+```batch
+@echo off
+:: Wait for network to stabilize
+timeout /t 15 /nobreak > nul
+
+:: Wake up WSL2 and ensure Docker is running
+wsl.exe -d Ubuntu -u root -- systemctl start docker
+
+:: Start all Docker Compose services
+wsl.exe -d Ubuntu -u serveradmin -e bash -c ^
+  "cd ~/server && docker compose up -d --remove-orphans"
+
+echo [%date% %time%] Server stack started. >> C:\Server\startup.log
+```
+
+### 5.2 Create the WSL2 Port-Forwarding Script
+
+WSL2 gets a dynamic internal IP on each restart. This script detects it
+and configures Windows port proxy rules automatically.
+
+Create `C:\Server\wsl-port-forward.ps1`:
+
+```powershell
+# Ports to forward from Windows → WSL2
+$ports = @(80, 443, 3000, 8080, 8084, 11434)
+
+# Detect current WSL2 IP
+$wslIp = (wsl.exe -d Ubuntu -e hostname -I).Trim().Split(" ")[0]
+
+if (-not $wslIp) {
+    Write-Error "WSL2 IP not found. Is Ubuntu running?"
+    Exit 1
+}
+
+Write-Host "WSL2 IP: $wslIp"
+
+# Clear existing proxy rules
+netsh interface portproxy reset
+
+foreach ($port in $ports) {
+    # Forward Windows port → WSL2
+    netsh interface portproxy add v4tov4 `
+        listenport=$port listenaddress=0.0.0.0 `
+        connectport=$port connectaddress=$wslIp
+
+    # Allow through Windows Firewall
+    $rule = "WSL2_Forward_$port"
+    Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $rule `
+        -Direction Inbound -Action Allow `
+        -Protocol TCP -LocalPort $port | Out-Null
+}
+
+Write-Host "Port forwarding configured: $($ports -join ', ')"
+```
+
+### 5.3 Register Tasks in Task Scheduler
+
+Open PowerShell as Administrator:
+
+```powershell
+# Task 1: Start WSL2 + Docker containers
+$action1 = New-ScheduledTaskAction `
+    -Execute "C:\Server\start-server.bat"
+$trigger1 = New-ScheduledTaskTrigger -AtLogOn
+$settings1 = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+Register-ScheduledTask `
+    -TaskName "StartWSL2Server" `
+    -Action $action1 `
+    -Trigger $trigger1 `
+    -Settings $settings1 `
+    -RunLevel Highest `
+    -Force
+
+# Task 2: WSL2 Port Forwarding (runs as SYSTEM for netsh access)
+$action2 = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-ExecutionPolicy Bypass -File C:\Server\wsl-port-forward.ps1"
+$trigger2 = New-ScheduledTaskTrigger -AtStartup
+
+Register-ScheduledTask `
+    -TaskName "WSL2PortForward" `
+    -Action $action2 `
+    -Trigger $trigger2 `
+    -User "SYSTEM" `
+    -RunLevel Highest `
+    -Force
+```
+
+---
+
+## Part 6: The Complete Docker Compose Stack
+
+Create `~/server/docker-compose.yml` inside WSL2:
+
+```yaml
+# ~/server/docker-compose.yml
+# HP Pavilion 14-dv2077TU Home Server Stack
+# 16 GB RAM — deploy services incrementally
+
+networks:
+  server_net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  portainer_data:
+  nextcloud_data:
+  nextcloud_db_data:
+  vaultwarden_data:
+  ollama_data:
+  open_webui_data:
+  odysseus_data:
+  flowise_data:
+  qdrant_data:
+  uptime_kuma_data:
+  immich_data:
+  n8n_data:
+
+services:
+
+  # ─── REVERSE PROXY ─────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ─── MANAGEMENT ────────────────────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── PRIVATE CLOUD ─────────────────────────────────────────
+  nextcloud_db:
+    image: mariadb:11
+    container_name: nextcloud_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme_root
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: changeme_nc
+    volumes:
+      - nextcloud_db_data:/var/lib/mysql
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  nextcloud:
+    image: nextcloud:29-apache
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      - nextcloud_db
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      MYSQL_HOST: nextcloud_db
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: changeme_nc
+      NEXTCLOUD_TRUSTED_DOMAINS: "files.yourdomain.com"
+    volumes:
+      - nextcloud_data:/var/www/html
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── PASSWORD MANAGER ──────────────────────────────────────
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:80"
+    environment:
+      DOMAIN: "https://vault.yourdomain.com"
+      SIGNUPS_ALLOWED: "false"  # Disable after first account creation
+    volumes:
+      - vaultwarden_data:/data
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ─── LOCAL AI — OLLAMA ─────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # One model at a time on 16 GB — prevents OOM
+      OLLAMA_NUM_PARALLEL: "1"
+      # Keep model loaded for 5 min idle, then free RAM
+      OLLAMA_KEEP_ALIVE: "5m"
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          # Cap at 11 GB — leaves room for OS + other services
+          memory: 11000M
+          cpus: "8.00"  # Leave 2 cores for Windows/WSL overhead
+
+  # ─── AI CHAT INTERFACE ─────────────────────────────────────
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open_webui
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    ports:
+      - "127.0.0.1:8084:8080"
+    environment:
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      WEBUI_SECRET_KEY: "replace_with_a_strong_random_secret"
+    volumes:
+      - open_webui_data:/app/backend/data
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── ODYSSEUS AI WORKSPACE ─────────────────────────────────
+  odysseus:
+    image: ghcr.io/pewdiepie-archdaemon/odysseus:latest
+    container_name: odysseus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7000:7000"
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    volumes:
+      - odysseus_data:/app/data
+    networks:
+      - server_net
+    depends_on:
+      - ollama
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── VISUAL AI WORKFLOW BUILDER ────────────────────────────
+  flowise:
+    image: flowiseai/flowise:latest
+    container_name: flowise
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8083:3000"
+    environment:
+      PORT: "3000"
+      DATABASE_PATH: /root/.flowise
+      APIKEY_PATH: /root/.flowise
+    volumes:
+      - flowise_data:/root/.flowise
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  # ─── VECTOR DATABASE (for RAG) ─────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── UPTIME MONITORING ─────────────────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime_kuma
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── WORKFLOW AUTOMATION ───────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: "automation.yourdomain.com"
+      N8N_PORT: "5678"
+      WEBHOOK_URL: "https://automation.yourdomain.com/"
+      GENERIC_TIMEZONE: "Asia/Kolkata"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - server_net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── PHOTO BACKUP ──────────────────────────────────────────
+  # Immich requires significant resources — deploy only if you have
+  # adequate free RAM after other services stabilize.
+  # Uncomment when ready:
+  #
+  # immich-server:
+  #   image: ghcr.io/immich-app/immich-server:release
+  #   container_name: immich_server
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:2283:2283"
+  #   volumes:
+  #     - immich_data:/usr/src/app/upload
+  #   networks:
+  #     - server_net
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1024M
+```
+
+---
+
+## Part 7: Caddy Reverse Proxy Configuration
+
+Caddy automatically provisions and renews TLS certificates via Let's Encrypt.
+When paired with Cloudflare Tunnel (which terminates HTTPS at the edge),
+Caddy handles internal routing cleanly.
+
+Create `~/server/caddy/Caddyfile`:
+
+```caddyfile
+# Global options
+{
+  # Disable automatic HTTPS since Cloudflare handles TLS termination
+  auto_https off
+}
+
+# Portainer
+portainer.yourdomain.com {
+  reverse_proxy portainer:9000
+}
+
+# Nextcloud (private cloud)
+files.yourdomain.com {
+  reverse_proxy nextcloud:80
+  # Required Nextcloud headers
+  header_up X-Forwarded-Proto "https"
+}
+
+# Vaultwarden (password manager)
+vault.yourdomain.com {
+  reverse_proxy vaultwarden:80
+}
+
+# Open WebUI (local AI chat)
+ai.yourdomain.com {
+  reverse_proxy open_webui:8080
+}
+
+# Odysseus AI workspace
+odysseus.yourdomain.com {
+  reverse_proxy odysseus:7000
+}
+
+# Flowise (visual AI builder)
+flowise.yourdomain.com {
+  reverse_proxy flowise:3000
+}
+
+# Uptime monitoring
+status.yourdomain.com {
+  reverse_proxy uptime_kuma:3001
+}
+
+# n8n workflow automation
+automation.yourdomain.com {
+  reverse_proxy n8n:5678
+}
+```
+
+---
+
+## Part 8: Deploying and Pulling AI Models
+
+### 8.1 Pull Recommended Models for 16 GB
+
+The i5-1235U's dual-channel DDR4 provides ~51.2 GB/s of memory bandwidth.
+Local LLM speed is bounded by this bandwidth, not raw compute.
+
+**Memory bandwidth formula:**
+```
+Token speed = Memory Bandwidth ÷ Model RAM size
+```
+
+For a 4-bit quantized 7B model (~4 GB):
+```
+Speed ≈ 51.2 GB/s ÷ 4 GB = ~12.8 tokens/second
+```
+
+Recommended models for your hardware:
+
+| Model               | RAM Used | CPU Speed  | Best For                        |
+| :------------------ | :------- | :--------- | :------------------------------ |
+| **phi4-mini:latest**| ~2.5 GB  | 15–18 t/s  | Fast everyday tasks, chat       |
+| **qwen3:4b**        | ~2.8 GB  | 13–16 t/s  | Multilingual, reasoning, code   |
+| **gemma3:4b**       | ~2.8 GB  | 12–15 t/s  | Conversational tasks            |
+| **hermes3:8b**      | ~5.8 GB  | 6–8 t/s    | Agentic loops, tool use         |
+| **devstral:7b**     | ~5.0 GB  | 7–9 t/s    | Code generation and debugging   |
+| **nomic-embed-text**| ~300 MB  | Fast       | Document embeddings for RAG     |
+
+Pull models:
+```bash
+# Start the Ollama container first
+docker compose up -d ollama
+
+# Pull your chosen models
+docker exec ollama ollama pull phi4-mini
+docker exec ollama ollama pull qwen3:4b
+docker exec ollama ollama pull hermes3:8b
+docker exec ollama ollama pull nomic-embed-text
+```
+
+### 8.2 Configure Ollama for CPU-Only Operation
+
+The Iris Xe GPU uses shared memory—running AI inference through the GPU
+means competing with the GPU for RAM. For stability, lock Ollama to CPU:
+
+```bash
+# Test CPU inference with a quick prompt
+docker exec ollama ollama run phi4-mini "Hello, are you running on CPU?"
+```
+
+If you want to experiment with Iris Xe acceleration, add to the ollama
+service in compose:
+```yaml
+    environment:
+      OLLAMA_INTEL_GPU: "1"
+```
+
+This enables OpenVINO-based GPU offloading for small models. Results vary.
+
+---
+
+## Part 9: Odysseus AI Workspace
+
+Odysseus is an open-source, self-hosted AI workspace released in 2026.
+It bundles chat, autonomous agents, deep research, document handling,
+email management, and calendar integration into a single dashboard.
+
+### Install via Docker Compose (using the pre-built image)
+
+The compose service is already defined above. Simply bring it up:
+
+```bash
+docker compose up -d odysseus
+```
+
+Access at `http://localhost:7000`. The default login is:
+- Username: `admin`
+- Password: Check container logs → `docker compose logs odysseus`
+
+### Connect Odysseus to Your Local Ollama
+
+1. Open Odysseus at `http://localhost:7000`.
+2. Go to **Settings** → **AI Providers** → **Add Provider**.
+3. Select **Ollama** → Base URL: `http://ollama:11434`.
+4. Click **Test Connection** → should show your pulled models.
+5. Select **hermes3:8b** for agents (best tool-use capability).
+6. Select **phi4-mini** for chat (fastest response).
+
+### Install via Git (Alternative — builds from source)
+
+```bash
+# Inside WSL2
+cd ~/server
+git clone https://github.com/pewdiepie-archdaemon/odysseus.git odysseus-src
+cd odysseus-src
+cp .env.example .env
+# Edit .env if needed
+docker compose up -d --build
+```
+
+---
+
+## Part 10: RAM Budget — Running It All Together
+
+With all core services running, here is the realistic memory usage breakdown:
+
+| Service              | Idle RAM   | Notes                              |
+| :------------------- | :--------- | :--------------------------------- |
+| Windows 11 Host      | ~2.5 GB    | DWM, Explorer, Defender, etc.      |
+| WSL2 Linux kernel    | ~150 MB    | Minimal with systemd + Docker      |
+| Docker Engine daemon | ~80 MB     | Native, no GUI overhead            |
+| Caddy                | ~30 MB     | Tiny Go binary                     |
+| Portainer            | ~80 MB     | Web UI for container management    |
+| Nextcloud + MariaDB  | ~900 MB    | Combined (spikes during sync)      |
+| Vaultwarden          | ~30 MB     | Rust binary, extremely lightweight |
+| Ollama (idle)        | ~100 MB    | No model loaded                    |
+| Ollama + phi4-mini   | ~2.8 GB    | When actively generating           |
+| Ollama + hermes3:8b  | ~6.2 GB    | When actively generating           |
+| Open WebUI           | ~200 MB    | PyTorch embeddings add ~300 MB     |
+| Odysseus             | ~300 MB    | Workspace + agent runtime          |
+| Flowise              | ~150 MB    | Node.js, SQLite                    |
+| Qdrant               | ~50 MB     | Rust vector DB                     |
+| Uptime Kuma          | ~80 MB     | Node.js monitoring                 |
+| n8n                  | ~200 MB    | Automation workflows               |
+
+**Total with phi4-mini active: ~8.6 GB**
+
+**Total with hermes3:8b active: ~12.0 GB**
+
+Both scenarios fit within the 16 GB budget with headroom. The `OLLAMA_KEEP_ALIVE=5m`
+setting automatically unloads the model when idle, dropping RAM usage back
+to ~8 GB without AI models loaded.
+
+> **Important**: Never load two large models simultaneously. With hermes3:8b
+> loaded, avoid also running heavy sync operations in Nextcloud. Stagger
+> workloads to avoid OOM crashes.
+
+---
+
+## Part 11: Starting All Services
+
+```bash
+# Navigate to your server directory inside WSL2
+cd ~/server
+
+# Start all core services (excluding resource-heavy optionals)
+docker compose up -d \
+  caddy portainer nextcloud_db nextcloud vaultwarden \
+  ollama open-webui odysseus flowise qdrant uptime-kuma n8n
+
+# Check everything is running
+docker compose ps
+
+# View live logs
+docker compose logs -f
+
+# Pull a quick test model
+docker exec ollama ollama run phi4-mini "Describe yourself in one sentence."
+```
+
+---
+
+## Part 12: Accessing Your Services
+
+Once Cloudflare Tunnel is running and DNS is configured, your services
+are accessible at:
+
+| Service          | URL                              | Default Port |
+| :--------------- | :------------------------------- | :----------- |
+| Portainer        | `portainer.yourdomain.com`       | 9000         |
+| Nextcloud        | `files.yourdomain.com`           | 8080         |
+| Vaultwarden      | `vault.yourdomain.com`           | 8081         |
+| Open WebUI       | `ai.yourdomain.com`              | 8084         |
+| Odysseus         | `odysseus.yourdomain.com`        | 7000         |
+| Flowise          | `flowise.yourdomain.com`         | 8083         |
+| Uptime Kuma      | `status.yourdomain.com`          | 3001         |
+| n8n              | `automation.yourdomain.com`      | 5678         |
+| Ollama API       | Local only (`localhost:11434`)   | 11434        |
+| Qdrant           | Local only (`localhost:6333`)    | 6333         |
+
+**Security tip**: Use Cloudflare Access (Zero Trust) to add an email-based
+login screen in front of any sensitive services like Portainer:
+
+1. Cloudflare Zero Trust → **Access** → **Applications** → **Add an App**
+2. Select **Self-hosted** → set the hostname to `portainer.yourdomain.com`
+3. Add a policy: allow your email address only.
+
+---
+
+## Part 13: Using Your Laptop While the Server Runs
+
+This is the dual-use setup. Your server stack keeps running in the background
+whether the lid is open or closed.
+
+**When you want to use Windows normally:**
+- Open the lid — Windows wakes immediately.
+- Use any Windows application normally.
+- The Docker containers in WSL2 keep running—they don't compete heavily with
+  the Windows desktop unless the AI model is actively generating tokens.
+
+**Performance impact during normal use:**
+- WSL2 Docker idle: negligible CPU, ~8 GB RAM used by server stack.
+- Your remaining ~8 GB RAM is available for Windows apps and browser tabs.
+- Active AI inference (Ollama) will spike CPU to 70–90%. Don't run heavy
+  inference during video calls or compilation.
+
+**Pause the server temporarily:**
+```batch
+:: In PowerShell (pause all containers)
+wsl.exe -d Ubuntu -u serveradmin -e bash -c "cd ~/server && docker compose pause"
+
+:: Resume
+wsl.exe -d Ubuntu -u serveradmin -e bash -c "cd ~/server && docker compose unpause"
+```
+
+**Shut down only the AI model (frees ~6 GB instantly):**
+```bash
+docker exec ollama ollama stop hermes3:8b
+```
+
+---
+
+## Part 14: Windows Health Monitoring Script
+
+Keep an eye on your hardware while it runs 24/7.
+
+Create `C:\Server\health-monitor.ps1`:
+
+```powershell
+# C:\Server\health-monitor.ps1
+# Home Server Hardware Health Monitor
+# Schedule this every 10 minutes via Task Scheduler
+
+$hostname   = $env:COMPUTERNAME
+$maxCpuTemp = 85.0    # Celsius alert threshold
+$minBattery = 60.0    # Battery health alert threshold
+
+# Telegram alert (optional — fill in your bot token and chat ID)
+$tgToken  = "YOUR_BOT_TOKEN"
+$tgChatId = "YOUR_CHAT_ID"
+
+function Send-TelegramAlert {
+    param([string]$Message)
+    $url = "https://api.telegram.org/bot$tgToken/sendMessage"
+    $body = @{ chat_id = $tgChatId; text = $Message; parse_mode = "Markdown" }
+    try {
+        Invoke-RestMethod -Uri $url -Method Post `
+            -Body ($body | ConvertTo-Json) `
+            -ContentType "application/json" > $null
+    } catch {
+        Write-Warning "Telegram alert failed: $_"
+    }
+}
+
+# 1. CPU Temperature
+$thermalZone = Get-CimInstance -Namespace root/wmi `
+    -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue
+$cpuTemp = if ($thermalZone) {
+    [math]::Round(($thermalZone.CurrentTemperature / 10) - 273.15, 1)
+} else { "N/A (ACPI driver not exposed)" }
+
+# 2. Battery status
+$battery = Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue
+$batCharge = if ($battery) { $battery.EstimatedChargeRemaining } else { "N/A" }
+$batHealth = if ($battery -and $battery.DesignCapacity -gt 0) {
+    [math]::Round(($battery.FullChargeCapacity / $battery.DesignCapacity) * 100, 1)
+} else { "N/A" }
+$isOnBattery = ($battery -and $battery.BatteryStatus -eq 1)
+
+# 3. Disk health
+$disk = Get-PhysicalDisk | Select-Object -First 1
+$diskHealth = $disk.HealthStatus
+
+# 4. RAM usage
+$os = Get-CimInstance Win32_OperatingSystem
+$ramUsedGB = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 1)
+$ramTotalGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+
+# Log to console
+Write-Host "[$hostname] Temp: $cpuTemp°C | RAM: ${ramUsedGB}/${ramTotalGB} GB" `
+    "| Battery: $batCharge% (Health: $batHealth%) | Disk: $diskHealth"
+
+# Alert conditions
+$alerts = @()
+if ($cpuTemp -is [double] -and $cpuTemp -gt $maxCpuTemp) {
+    $alerts += "🔥 *Overheating*: CPU at ${cpuTemp}°C (limit: ${maxCpuTemp}°C)"
+}
+if ($isOnBattery) {
+    $alerts += "🔌 *Power Loss*: Running on battery ($batCharge% remaining)"
+}
+if ($diskHealth -ne "Healthy") {
+    $alerts += "💾 *Disk Warning*: Health = $diskHealth"
+}
+if ($batHealth -is [double] -and $batHealth -lt $minBattery) {
+    $alerts += "🔋 *Battery Degraded*: Health = $batHealth%"
+}
+
+if ($alerts.Count -gt 0 -and $tgToken -ne "YOUR_BOT_TOKEN") {
+    $msg = "🚨 *Server Alert — $hostname*`n" + ($alerts -join "`n")
+    Send-TelegramAlert -Message $msg
+}
+```
+
+Schedule it:
+
+```powershell
+$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument "-ExecutionPolicy Bypass -File C:\Server\health-monitor.ps1"
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$trigger.Repetition = New-Object System.TimeSpan(0, 10, 0)
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+Register-ScheduledTask -TaskName "ServerHealthMonitor" `
+    -Action $action -Trigger $trigger -Settings $settings `
+    -User "SYSTEM" -Force
+```
+
+---
+
+## Part 15: Complete Service Reference Card
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              YOUR HOME SERVER SERVICES                       │
+├─────────────────────────┬───────────────────────────────────┤
+│ Portainer               │ Docker visual management          │
+│ Nextcloud               │ Private Google Drive/Photos       │
+│ Vaultwarden             │ Self-hosted Bitwarden passwords   │
+│ Ollama                  │ Local LLM runtime engine          │
+│ Open WebUI              │ ChatGPT-like AI chat interface    │
+│ Odysseus                │ Unified AI workspace + agents     │
+│ Flowise                 │ Visual LangChain workflow builder │
+│ Qdrant                  │ Vector DB for RAG pipelines       │
+│ Uptime Kuma             │ Service uptime monitoring         │
+│ n8n                     │ Workflow automation (Zapier alt)  │
+│ Cloudflare Tunnel       │ Secure public access, no ports   │
+│ Caddy                   │ Reverse proxy + routing           │
+├─────────────────────────┴───────────────────────────────────┤
+│ Models (via Ollama)                                         │
+│  phi4-mini   → Fast chat, everyday tasks, 2.5 GB RAM       │
+│  qwen3:4b    → Multilingual + reasoning, 2.8 GB RAM        │
+│  hermes3:8b  → Agents + deep reasoning, 5.8 GB RAM         │
+│  devstral:7b → Code generation, 5.0 GB RAM                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Part 16: Common Issues and Fixes
+
+### WSL2 Clock Drift After Sleep
+
+When Windows sleeps, WSL2 halts its clock. On wake, time is stale—breaking
+HTTPS certificates and OAuth sessions.
+
+Fix: Add a Task Scheduler task triggered **on system wake**:
+```powershell
+$action = New-ScheduledTaskAction -Execute "wsl.exe" `
+    -Argument "-d Ubuntu -u root -- hwclock -s"
+$trigger = New-ScheduledTaskTrigger -AtStartup
+# Also trigger on resume from S3/S4 via "On workstation unlock" event
+
+Register-ScheduledTask -TaskName "WSL2_ClockSync" `
+    -Action $action -Trigger $trigger -User "SYSTEM" -Force
+```
+
+### DNS Fails Inside WSL2 After VPN/Wi-Fi Change
+
+```bash
+# Inside WSL2 Ubuntu
+sudo chattr -i /etc/resolv.conf
+echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+sudo chattr +i /etc/resolv.conf
+```
+
+### Ollama Container OOM (Out of Memory) Killed
+
+Reduce the memory limit in compose or use a smaller model:
+```yaml
+    deploy:
+      resources:
+        limits:
+          memory: 8000M  # Reduce if system is OOM crashing
+```
+
+Or unload an existing model before loading a new one:
+```bash
+docker exec ollama ollama stop hermes3:8b
+docker exec ollama ollama run phi4-mini "test"
+```
+
+### Nextcloud "Untrusted Domain" Error
+
+Add your domain to Nextcloud config inside the container:
+```bash
+docker exec -u www-data nextcloud php occ config:system:set \
+  trusted_domains 1 --value="files.yourdomain.com"
+```
+
+### Cloudflare Tunnel Not Connecting
+
+```powershell
+# Check the service status
+Get-Service cloudflared
+cloudflared tunnel info home-server
+
+# Restart the service
+Restart-Service cloudflared
+```
+
+---
+
+## Electricity Cost Estimate (India)
+
+The i5-1235U draws ~15 W under server idle load (containers running,
+no AI inference). With the display off and lid closed:
+
+- **Idle server load**: ~12–15 W
+- **Active AI inference (Ollama)**: ~25–35 W
+
+**Monthly cost at ₹8/kWh (Indian average):**
+
+| Scenario            | Power   | Monthly Cost     |
+| :------------------ | :------ | :--------------- |
+| Server idle, 24/7   | 15 W    | ~₹86             |
+| With daily AI use   | avg 20W | ~₹115            |
+| Vs. cheapest VPS    | N/A     | ₹400–₹800/month  |
+
+**The laptop pays for itself vs. a comparable VPS within 3–4 months.**
+
+---
+
+## Next Steps
+
+1. **First 30 minutes**: Complete Parts 1–5 (Windows config, WSL2, Docker).
+2. **Next 30 minutes**: Deploy core services (Caddy, Portainer, Vaultwarden).
+3. **Next hour**: Pull your first AI model and open Open WebUI.
+4. **Day 2**: Configure Cloudflare Tunnel, route your domain.
+5. **Week 1**: Add Nextcloud, configure Odysseus, build your first n8n workflow.
+
+Your HP Pavilion is no longer just a laptop. It is a private cloud, a local
+AI server, an automation engine, and a password vault—all running silently
+in the background while you work.
