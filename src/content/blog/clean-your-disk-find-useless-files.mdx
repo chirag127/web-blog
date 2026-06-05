@@ -1,0 +1,906 @@
+---
+title: "Reclaim Your Disk: Every App and Method to Find Useless Files on Windows (With and Without AI)"
+description: "A complete guide to finding and safely deleting useless, dead, and duplicate files on Windows. Covers AI-powered tools, free visualizers like WizTree and WinDirStat, duplicate finders, Microsoft's built-in tools, developer junk cleanup, and a set of ready-to-run PowerShell scripts — so you can reclaim gigabytes in one afternoon."
+pubDate: 2026-06-05
+tags:
+  - Windows
+  - Disk-Cleanup
+  - Productivity
+  - Storage
+  - Tools
+  - PowerShell
+  - Free-Tools
+category: "Tools"
+author: "Chirag Singhal"
+draft: false
+---
+
+# Reclaim Your Disk: Every App and Method to Find Useless Files on Windows (With and Without AI)
+
+Your disk is full. Or maybe it is not full yet — but it is heading there,
+and you have no idea where all those gigabytes went. You installed a few
+things, downloaded some files, let a few projects accumulate, and now your
+256 GB SSD is showing 15 GB free.
+
+This guide covers everything: the built-in Windows tools that most people
+ignore, the best free third-party visualizers, duplicate file finders,
+AI-powered smart cleaners, developer-specific junk nukers, and a set of
+PowerShell one-liners you can run right now.
+
+By the end, you will know not just *what* to delete — but *where* to look
+and *how* to look, so you never have to wonder again where your space went.
+
+---
+
+## First: Understand Where Your Space Actually Goes
+
+Before downloading any tool, understand the typical culprits on a Windows
+machine:
+
+```
+Common Space Hogs on a Windows PC:
+─────────────────────────────────────────────────────────────────────
+1. Windows Update leftovers (WinSxS folder)      → 5–15 GB
+2. Hibernation file (hiberfil.sys)                → = RAM size (8–16 GB)
+3. Page file (pagefile.sys)                       → 2–16 GB
+4. Recycle Bin never emptied                      → 0–50 GB
+5. Downloads folder                               → 0–100 GB (!!!)
+6. Browser caches (Chrome, Firefox, Edge)         → 1–10 GB each
+7. Duplicate photos / videos                      → 5–50 GB
+8. node_modules (for developers)                  → 0.5–5 GB per project
+9. Old game installs / forgotten software         → 5–100 GB
+10. Docker images and unused WSL2 VHDXs           → 5–50 GB
+11. Thumbnails cache                               → 0.5–2 GB
+12. Windows.old (from an OS upgrade)              → 5–25 GB
+13. Virtual machine snapshots                     → 10–200 GB
+14. Zoom / Teams / OBS recordings                 → 5–100 GB
+```
+
+Now let us find and eliminate all of them.
+
+---
+
+## Part 1: Built-In Windows Tools — Start Here First
+
+### 1.1 Storage Sense (Windows 10 / 11)
+
+**What it is:** Microsoft's official automatic disk cleaner. Zero
+installation required. It clears temp files, Recycle Bin, and can
+make rarely-used OneDrive files "online-only" to free local space.
+
+**Where to find it:**
+
+```
+Settings (Win + I) → System → Storage → Storage Sense
+```
+
+**Configure it for maximum effect:**
+
+1. Enable the toggle → click **"Storage Sense"** to open settings.
+2. Set **"Run Storage Sense"** → **Every week**.
+3. **Delete temp files that apps aren't using** → On.
+4. **Delete files in the Recycle Bin for more than** → 30 days.
+5. **Delete files in Downloads that haven't been opened for** → 60 days.
+   (Only enable this if you manage Downloads actively — it will delete
+   old downloaded files automatically.)
+6. Scroll down → click **"Run Storage Sense now"**.
+
+**How much it typically frees:** 1–8 GB on average. More on machines
+that haven't been cleaned in a year.
+
+**Pro tip — also run Disk Cleanup with system files:**
+
+Press `Win + R` → type `cleanmgr` → select your C: drive → click
+**"Clean up system files"** (runs as Admin). This unlocks additional
+categories:
+
+- **Windows Update Cleanup** → often 3–12 GB
+- **Windows upgrade log files** → 0.5–2 GB
+- **Previous Windows installations (Windows.old)** → 5–25 GB
+- **Temporary Internet Files** → 0.5–5 GB
+
+> **The "Windows Update Cleanup" and "Previous Windows installations"
+> options are the biggest wins here.** Do not skip them.
+
+### 1.2 Microsoft PC Manager (Free, from Microsoft Store)
+
+**What it is:** Microsoft's official utility that consolidates cleanup
+features into one dashboard. Free, no ads, no bloatware push.
+
+**Install:**
+
+```
+Search "Microsoft PC Manager" in the Microsoft Store → Get
+```
+
+Or install via winget:
+```powershell
+winget install --id Microsoft.PCManager -e --silent
+```
+
+**Key features for disk cleanup:**
+- **Deep Cleanup** tab: Scans system junk, log files, browser caches,
+  and orphaned app data in one pass.
+- **Large Files** scan: Shows the largest files on your drives, sorted
+  by size — lets you decide what to delete manually.
+- **Storage** view: Shows a breakdown similar to Settings → Storage.
+- **Startup apps**: Disable apps that slow down boot without uninstalling
+  them.
+
+**Verdict:** The safest "one-click" cleaner because it uses Windows'
+own APIs rather than third-party algorithms. Will not touch anything
+that could break your system. However, it is not the most powerful
+tool for hunting down deep junk.
+
+### 1.3 DISM Component Store Cleanup (Command Line)
+
+The `C:\Windows\WinSxS` folder can grow to 10–20 GB over time. Windows
+keeps old update components here in case you need to roll back. DISM
+can safely remove superseded components:
+
+```powershell
+# Open PowerShell as Administrator
+
+# Step 1: Analyze the component store (see how much is recoverable)
+Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore
+
+# Step 2: Clean up superseded update components
+# Safe: only removes components that have been replaced by newer ones
+Dism.exe /Online /Cleanup-Image /StartComponentCleanup
+
+# Step 3: More aggressive clean (removes everything that is not active)
+# Warning: cannot roll back updates after this
+Dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase
+```
+
+Typical savings from `/StartComponentCleanup`: **2–8 GB**.
+From `/ResetBase` on an old, well-updated system: **up to 12 GB**.
+
+---
+
+## Part 2: Disk Space Visualizers — See Where Everything Is
+
+These tools give you a visual map of your entire disk so you can find
+the biggest culprits at a glance. Think of them as X-ray vision for
+your storage.
+
+### 2.1 WizTree — The Fastest Disk Analyzer Available
+
+**Type:** Free (personal use), paid (commercial)
+**Download:** [diskanalyzer.com/wiztree](https://diskanalyzer.com)
+
+WizTree reads the NTFS **Master File Table (MFT)** directly — the same
+internal index Windows itself uses — instead of walking every folder
+recursively. This makes it dramatically faster than competitors:
+
+```
+Scanning a 1 TB drive with 500,000 files:
+
+WizTree:      ~3–8 seconds
+TreeSize:     ~30–60 seconds
+WinDirStat:   ~3–8 minutes
+```
+
+**What you get:**
+- A **treemap** view: colored rectangles proportional to file size. The
+  bigger the rectangle, the bigger the file. Instant visual identification
+  of space hogs.
+- A **file list** view: sorted by size, shows the largest files and
+  folders anywhere on the drive.
+- Filter by file extension: want to see all `.mp4` files? All `*.log`
+  files? Filter in one click.
+- Export to CSV for spreadsheet analysis.
+
+**How to use it effectively:**
+
+1. Install and run as Administrator.
+2. Select drive C: (or whichever you want to analyze).
+3. In the treemap, look for the biggest rectangles — hover to see the
+   file name and size.
+4. Common large surprises: game installs in unexpected locations,
+   Zoom/Teams recordings in `Documents`, Docker VHDX files, old
+   `.iso` installer files.
+5. Switch to **"Files"** tab → sort by size → identify every file over
+   1 GB and decide if you still need it.
+
+**Best for:** Power users who want maximum speed and direct control.
+You decide what to delete — WizTree just shows you where everything is.
+
+### 2.2 WinDirStat — Open-Source Classic
+
+**Type:** Free, open-source (GPL)
+**Download:** [windirstat.net](https://windirstat.net)
+
+The classic disk visualizer that millions of Windows users have trusted
+since the early 2000s. Recently updated with multi-threaded scanning for
+much better speed on modern multi-core CPUs. Fully open-source — you can
+review the code yourself.
+
+**What makes WinDirStat unique:**
+- **Color-coded file type legend**: each file type gets a unique color
+  in the treemap. Easy to spot when, say, 40% of your disk is videos or
+  40% is one specific application's data.
+- No telemetry, no ads, no sign-up required.
+- Portable — run from a USB drive without installing.
+
+**When to choose WinDirStat over WizTree:**
+- When you value open-source transparency over speed.
+- When scanning a non-NTFS drive (FAT32, exFAT) where MFT tricks do not
+  apply — both tools scan similarly in this case.
+- On drives with fewer than 100,000 files — the speed difference becomes
+  negligible.
+
+### 2.3 TreeSize Free — The Professional Option
+
+**Type:** Free version available; paid Professional version for businesses
+**Download:** [jam-software.com/treesize](https://www.jam-software.com/treesize)
+
+TreeSize takes a more traditional folder-tree approach rather than a
+treemap. If you think in terms of "folders" rather than colored blocks,
+TreeSize's hierarchical view may feel more natural.
+
+**Free vs. Professional:**
+- **Free**: Scan local drives, view by folder/file, search for large files.
+- **Professional**: Network drive scanning, scheduling, reports, age-based
+  analysis, duplicate detection.
+
+**What the free version does well:**
+- **Age analysis**: Shows when files were last accessed. Folders you
+  have not touched in 2 years are obvious candidates for archiving.
+- **Size breakdown**: Click any folder to see its total size including
+  all sub-folders.
+- Integrates into Windows Explorer right-click menu (optional).
+
+---
+
+## Part 3: Duplicate File Finders — Stop Paying for the Same Data Twice
+
+Duplicates are surprisingly common. Every time you copy "just in case",
+download the same photo from WhatsApp twice, or re-download software
+installers, you are wasting space with identical data.
+
+### 3.1 dupeGuru — Open-Source with Fuzzy Matching (Best Overall)
+
+**Type:** Free, open-source (GPLv3)
+**Download:** [dupeguru.voltaicideas.net](https://dupeguru.voltaicideas.net)
+
+dupeGuru is the most powerful free duplicate finder because it can find
+both **exact duplicates** (identical byte-for-byte files) and **similar
+files** (same image with different sizes, same song with different tags).
+
+**Three scanning modes:**
+
+| Mode         | What it finds                                       | Best for                  |
+| :----------- | :-------------------------------------------------- | :------------------------ |
+| **Standard** | Exact byte-for-byte duplicates (any file type)      | Documents, downloads      |
+| **Music**    | Similar audio: same song, different bitrate/tag     | iTunes/Spotify downloads  |
+| **Picture**  | Similar images: same photo, different crop/size     | WhatsApp/camera libraries |
+
+**How to use for photo libraries:**
+1. Open dupeGuru → Switch to **Picture** mode.
+2. Add your `Pictures` folder and any phone backup folders.
+3. Set **Match %** → 95% (finds near-identical images).
+4. Scan → review → delete the lower-quality versions, keeping the
+   highest resolution.
+
+**Safety features:**
+- Sends files to Recycle Bin by default (not permanent delete).
+- "Mark dupe group" — automatically marks all but one copy per group.
+- Preview images before deleting (in Picture mode).
+
+### 3.2 AllDup — Maximum Control for Power Users
+
+**Type:** Free (freeware, personal use)
+**Download:** [alldup.info](https://www.alldup.info)
+
+AllDup gives you more granular control than any other free tool. You
+can define exactly what "duplicate" means:
+
+- Match by: file content (hash), file name, file size, last modified
+  date, or any combination.
+- Include/exclude specific folders or file types.
+- Scan across network drives and external drives simultaneously.
+- Results grouped by "duplicate group" — you see all copies together.
+
+**Advanced workflow for large document libraries:**
+
+```
+Settings in AllDup for a deep scan:
+  ✅ Compare file content (MD5/SHA1 hash — exact match)
+  ✅ Include subdirectories
+  ✅ Scan hidden files
+  ✅ Skip files smaller than 100 KB (optional — avoids tiny system files)
+  Exclude folders:
+    C:\Windows\
+    C:\Program Files\
+    C:\Program Files (x86)\
+```
+
+After scanning, use **"Select oldest copy"** → delete → you keep the
+most recently modified version of every duplicate.
+
+### 3.3 Auslogics Duplicate File Finder — Easiest for Beginners
+
+**Type:** Free
+**Download:** [auslogics.com/en/software/duplicate-file-finder](https://www.auslogics.com)
+
+If you want to get started without reading documentation, Auslogics has
+the most polished beginner-friendly interface. Three steps:
+1. Choose folders to scan.
+2. Choose file types (All Files, or just Images / Music / Video / Documents).
+3. Scan → review → delete.
+
+Results are color-coded by file type, making it visually easy to spot
+what is consuming space. Sends duplicates to a dedicated Backup folder
+before deletion — you can restore if you make a mistake.
+
+**When to use Auslogics vs. dupeGuru:**
+- Auslogics: You are not technical, want simple one-click operation.
+- dupeGuru: You have a large media library with similar (not just
+  identical) files.
+
+---
+
+## Part 4: General Junk Cleaners
+
+### 4.1 BleachBit — Open-Source CCleaner Alternative
+
+**Type:** Free, open-source (GPL)
+**Download:** [bleachbit.org](https://www.bleachbit.org)
+
+BleachBit is the open-source equivalent of CCleaner, without CCleaner's
+controversial history (it was once caught including unwanted software).
+BleachBit cleans:
+
+- Browser caches: Chrome, Firefox, Edge, Brave, Opera (all at once)
+- Temp files and application logs
+- Thumbnail cache
+- MRU lists (recently opened files lists)
+- System memory dumps and crash reports
+
+**Notable feature — Command Line mode:**
+
+```powershell
+# Run BleachBit silently from PowerShell
+& "C:\Program Files\BleachBit\bleachbit_console.exe" `
+    --preset `
+    --clean `
+    google_chrome.cache `
+    microsoft_edge.cache `
+    firefox.cache `
+    system.recycle_bin `
+    system.tmp
+```
+
+This is useful for scheduling a monthly automated cleanup via Task
+Scheduler.
+
+### 4.2 CCleaner — The Household Name (Use with Caution)
+
+**Type:** Free (basic) / Paid (Pro)
+**Download:** [ccleaner.com](https://www.ccleaner.com)
+
+CCleaner is the most downloaded PC cleaner in history. It works. However,
+use it with caution:
+
+- Its **Registry Cleaner** is frequently criticized for causing more
+  problems than it solves. Skip it entirely.
+- In 2017, CCleaner was temporarily bundled with a backdoor trojan
+  (before Avast acquired it). The current version (2024/2025) is clean
+  but the reputation damage remains.
+- Stick to the **Custom Clean** section for temp files and browser caches.
+  Avoid the "Optimizer" and "Registry" modules.
+
+**Safe CCleaner use:**
+1. Open CCleaner → **Custom Clean** tab.
+2. Check only: **Windows** section → Temp files, Recycle Bin, Clipboard.
+3. Check: **Applications** section → your browsers' caches.
+4. **Uncheck**: Registry, Windows Old Prefetch, Taskbar Jump Lists.
+5. Click **Analyze** → review the list → **Run Cleaner**.
+
+### 4.3 The Unarchiver / PeaZip — Find and Delete Redundant Archives
+
+After you extract a ZIP or RAR archive, the original archive often sits
+on your disk alongside the extracted folder, doubling the space. Search
+for old archives you have already extracted:
+
+```powershell
+# Find all .zip, .rar, .7z, .iso files on your C: drive sorted by size
+Get-ChildItem -Path "C:\" -Include "*.zip","*.rar","*.7z","*.iso","*.tar*" `
+    -Recurse -ErrorAction SilentlyContinue |
+    Sort-Object Length -Descending |
+    Select-Object -First 20 FullName,
+        @{N="Size_MB";E={[math]::Round($_.Length/1MB,1)}},
+        LastWriteTime |
+    Format-Table -AutoSize
+```
+
+Review the output — any archive you extracted more than 6 months ago
+is almost certainly safe to delete.
+
+---
+
+## Part 5: AI-Powered Tools — The New Generation
+
+### 5.1 What "AI" Actually Means in Disk Cleanup Tools
+
+Before listing AI-powered tools, be honest about what these terms mean:
+
+| Claim              | What it usually means                                       |
+| :----------------- | :---------------------------------------------------------- |
+| "AI-powered"        | Rule-based heuristics with ML classification of file types |
+| "Smart cleanup"     | Whitelist/blacklist of known safe-to-delete file patterns  |
+| "Intelligent scan"  | Priority scoring based on file age, access time, and size  |
+| "Deep learning"     | Often marketing language — verify by checking the product  |
+
+True AI (neural networks trained on file behavior) is rare in this space.
+Most tools that claim AI are using sophisticated rule engines. That is
+not bad — it is just not ML inference.
+
+**Real AI-adjacent use cases exist in:**
+- **Semantic file search** (Windows Copilot / Copilot+ PCs with NPU)
+- **Duplicate image detection using perceptual hashing** (dupeGuru's
+  picture mode)
+- **Face and scene recognition in photo libraries** (Google Photos,
+  Apple Photos — not disk cleaning, but smart organization)
+
+### 5.2 IObit Advanced SystemCare — AI-Assisted Junk Removal
+
+**Type:** Free (basic) / Paid (Pro)
+**Download:** [iobit.com/advancedsystemcare](https://www.iobit.com)
+
+Advanced SystemCare markets its "AI-powered" engine as intelligently
+identifying junk based on patterns from millions of scans. In practice,
+it uses a frequently-updated database of known junk file patterns (temp
+folder locations, browser cache paths, log directories for specific apps)
+combined with heuristic file age scoring.
+
+**What it genuinely does well:**
+- Identifies app-specific cache folders that generic cleaners miss.
+- "Turbo Boost" mode temporarily stops background processes for better
+  performance during resource-intensive tasks.
+- Browser protection against homepage hijacking.
+- Startup item management with risk scores.
+
+**Caution:** The free version constantly upsells the Pro version and
+may install toolbar software during the installation wizard. During
+install: **uncheck "Install IObit Driver Booster"** and all optional
+add-ons. Read every installation screen.
+
+### 5.3 Gemini 2 (Mac) / AI Image Duplicate Finders (Windows)
+
+On Mac, **Gemini 2** by MacPaw is the gold standard for AI-powered
+duplicate detection — it uses neural networks to identify similar images,
+not just identical byte sequences.
+
+For Windows, the equivalent capability is offered by:
+
+**Duplicate Cleaner Pro** (paid, ~$30 one-time):
+- Uses perceptual hashing for image comparison — finds rotated, cropped,
+  or differently-compressed versions of the same photo.
+- Scans face similarity across portrait photo collections.
+- Worth it if you have 10,000+ photos from multiple devices.
+
+**Free alternative:** dupeGuru's Picture mode (covered in Part 3) offers
+similar perceptual hashing for free.
+
+### 5.4 Windows Copilot / Search for Semantic File Finding
+
+On **Windows 11 with Copilot+** (NPU-equipped devices like Snapdragon X
+Elite, Intel Core Ultra 200V), Microsoft's **Recall** feature and
+**enhanced semantic search** can help you find files by describing their
+content rather than their name:
+
+```
+Example queries (Windows Search / Copilot):
+"Show me PDF documents from last year I haven't opened recently"
+"Find images of my car"
+"Documents related to my bank"
+```
+
+This is not traditional disk cleaning — it is intelligent file *retrieval*
+that helps you identify which files are even worth keeping before you
+decide to clean.
+
+For standard Windows 10/11 without AI hardware acceleration:
+
+```powershell
+# Use PowerShell to simulate "smart" file finding with last access time
+# Find files NOT opened in the last 12 months (potential candidates for archiving)
+Get-ChildItem -Path "C:\Users\$env:USERNAME\Documents" `
+    -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastAccessTime -lt (Get-Date).AddMonths(-12) } |
+    Sort-Object Length -Descending |
+    Select-Object -First 30 FullName,
+        @{N="Size_MB";E={[math]::Round($_.Length/1MB,1)}},
+        LastAccessTime |
+    Format-Table -AutoSize
+```
+
+### 5.5 SpaceSniffer — Interactive Real-Time Treemap
+
+**Type:** Free (portable, no install)
+**Download:** [uderzo.it/main_products/space_sniffer](http://www.uderzo.it/main_products/space_sniffer)
+
+SpaceSniffer is unique: its treemap **animates in real time** as the
+scan progresses. Squares grow and shrink as the tool discovers files.
+It also lets you **drill down interactively** — double-click any rectangle
+to zoom into that folder, seeing all its contents scaled proportionally.
+
+This interactive drill-down is actually more intuitive for disk exploration
+than static treemaps. You explore like you are flying over a landscape,
+zooming into dense areas.
+
+---
+
+## Part 6: Developer-Specific Junk — Gigabytes of Hidden Waste
+
+If you are a developer, you have a unique category of disk hogs that
+general cleaning tools completely miss.
+
+### 6.1 node_modules — The Famous Black Hole
+
+Every JavaScript/TypeScript project you ever started and forgot about has
+a `node_modules` folder. These can be 500 MB to 2 GB each. If you have
+20 old projects sitting in `C:\Code\`, that is potentially 10–40 GB.
+
+```powershell
+# Find all node_modules folders and their sizes
+Get-ChildItem -Path "C:\Users\$env:USERNAME" -Directory `
+    -Filter "node_modules" -Recurse -ErrorAction SilentlyContinue |
+    Select-Object @{
+        N="Path";
+        E={$_.FullName}
+    },
+    @{
+        N="Size_GB";
+        E={
+            [math]::Round(
+                (Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue |
+                 Measure-Object -Property Length -Sum).Sum / 1GB, 2
+            )
+        }
+    } |
+    Sort-Object Size_GB -Descending |
+    Format-Table -AutoSize
+
+# To delete them all (use with caution — verify you have package.json):
+# Get-ChildItem -Path "C:\Users\$env:USERNAME" -Directory `
+#     -Filter "node_modules" -Recurse -ErrorAction SilentlyContinue |
+#     ForEach-Object {
+#         Write-Host "Deleting: $($_.FullName)"
+#         Remove-Item $_.FullName -Recurse -Force
+#     }
+```
+
+**Tool: npkill** — the dedicated node_modules cleaner:
+
+```bash
+# Install globally (requires Node.js)
+npm install -g npkill
+
+# Run in your projects directory — interactive deletion UI
+npx npkill
+# Navigates with arrow keys, press Space to delete a node_modules
+# Shows the size saved in real time
+```
+
+### 6.2 Docker Images and Containers
+
+If you run Docker (or have WSL2 with Docker), unused images can accumulate:
+
+```powershell
+# From Windows — view Docker disk usage
+docker system df
+
+# Example output:
+# TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+# Images          15        3         12.6GB    9.4GB (74%)
+# Containers      8         2         1.2GB     800MB
+# Local Volumes   12        4         5.8GB     3.2GB
+
+# Clean up everything unused (images, stopped containers, unused networks)
+docker system prune -a --volumes
+# WARNING: -a and --volumes removes ALL unused items
+# Without -a: only removes dangling (untagged) images
+```
+
+### 6.3 Python Virtual Environments
+
+```powershell
+# Find all .venv and venv folders
+Get-ChildItem -Path "C:\Users\$env:USERNAME" -Directory `
+    -Filter ".venv" -Recurse -ErrorAction SilentlyContinue |
+    Select-Object FullName
+
+Get-ChildItem -Path "C:\Users\$env:USERNAME" -Directory `
+    -Filter "venv" -Recurse -ErrorAction SilentlyContinue |
+    Select-Object FullName
+```
+
+Delete any virtual environment folder from old/abandoned projects. You
+can recreate them with `python -m venv .venv` and `pip install -r requirements.txt`.
+
+### 6.4 WSL2 VHDX Files
+
+```powershell
+# Find all WSL2 virtual disk files (VHDX)
+Get-ChildItem "$env:LOCALAPPDATA\Packages" -Directory |
+    ForEach-Object {
+        Get-ChildItem $_.FullName -Filter "*.vhdx" -Recurse `
+            -ErrorAction SilentlyContinue
+    } |
+    Select-Object FullName, @{N="Size_GB";E={[math]::Round($_.Length/1GB,2)}}
+```
+
+If you have old WSL2 distributions you no longer use:
+```powershell
+# List all installed WSL distributions
+wsl --list --verbose
+
+# Unregister (delete) a distribution you no longer use
+wsl --unregister Ubuntu-20.04
+# This deletes the VHDX and frees all that space immediately
+```
+
+### 6.5 Game Development Cache (Unity, Unreal, Godot)
+
+| Tool    | Cache Location                                     | Typical Size |
+| :------ | :------------------------------------------------- | :----------- |
+| Unity   | `C:\Users\<user>\AppData\Local\Unity`              | 2–15 GB      |
+| Unity   | `Library\` folder in each project                  | 1–10 GB each |
+| Unreal  | `C:\Users\<user>\AppData\Local\UnrealEngine`       | 5–20 GB      |
+| Godot   | `.godot\` folder in each project                   | 0.5–3 GB     |
+
+Unity's `Library` folder in each project directory is the biggest
+offender. It is 100% safe to delete — Unity rebuilds it when you open
+the project again (at the cost of ~5–10 minutes of import time).
+
+---
+
+## Part 7: The Master PowerShell Audit Script
+
+Run this script once to get a comprehensive snapshot of every major
+space hog on your system. Copy, save as `disk-audit.ps1`, and run as
+Administrator:
+
+```powershell
+#Requires -Version 5.0
+# ═══════════════════════════════════════════════════════════════
+# Windows Disk Space Audit Script
+# Finds the most common space hogs in one run
+# Run as Administrator for complete results
+# ═══════════════════════════════════════════════════════════════
+
+$user    = $env:USERNAME
+$profile = $env:USERPROFILE
+$report  = @()
+
+Write-Host "`n═══════════════════════════════════" -ForegroundColor Cyan
+Write-Host " WINDOWS DISK AUDIT — $env:COMPUTERNAME" -ForegroundColor Cyan
+Write-Host "═══════════════════════════════════`n" -ForegroundColor Cyan
+
+# ── Helper: Get folder size ────────────────────────────────────
+function Get-FolderSize {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        $size = (Get-ChildItem $Path -Recurse -Force -ErrorAction SilentlyContinue |
+                 Measure-Object -Property Length -Sum).Sum
+        return [math]::Round($size / 1GB, 2)
+    }
+    return 0
+}
+
+# ── 1. Drive Overview ──────────────────────────────────────────
+Write-Host "► DRIVE USAGE" -ForegroundColor Yellow
+Get-PSDrive -PSProvider FileSystem |
+    Where-Object { $_.Used -gt 0 } |
+    Select-Object Name,
+        @{N="Used_GB"; E={[math]::Round($_.Used/1GB,1)}},
+        @{N="Free_GB"; E={[math]::Round($_.Free/1GB,1)}},
+        @{N="Total_GB";E={[math]::Round(($_.Used+$_.Free)/1GB,1)}},
+        @{N="% Used";  E={[math]::Round(($_.Used/($_.Used+$_.Free))*100,0)}} |
+    Format-Table -AutoSize
+
+# ── 2. Known Large System Files ────────────────────────────────
+Write-Host "`n► KNOWN LARGE SYSTEM FILES" -ForegroundColor Yellow
+$systemFiles = @(
+    @{Name="Hibernation file (hiberfil.sys)"; Path="C:\hiberfil.sys"},
+    @{Name="Page file (pagefile.sys)";        Path="C:\pagefile.sys"},
+    @{Name="Windows.old (old OS)";            Path="C:\Windows.old"},
+    @{Name="MiniDump crash files";            Path="C:\Windows\Minidump"}
+)
+foreach ($f in $systemFiles) {
+    if (Test-Path $f.Path) {
+        $sz = [math]::Round(
+            (Get-ChildItem $f.Path -Force -ErrorAction SilentlyContinue |
+             Measure-Object Length -Sum).Sum / 1GB, 2)
+        Write-Host "  $([string]($sz).PadLeft(6)) GB  → $($f.Name)" -ForegroundColor White
+    }
+}
+
+# ── 3. User Folder Breakdown ───────────────────────────────────
+Write-Host "`n► USER FOLDER SIZES" -ForegroundColor Yellow
+$userDirs = @("Desktop","Documents","Downloads","Pictures","Videos","Music")
+foreach ($dir in $userDirs) {
+    $path = Join-Path $profile $dir
+    $size = Get-FolderSize $path
+    if ($size -gt 0.01) {
+        $bar = "█" * [math]::Min([math]::Round($size * 2), 30)
+        Write-Host ("  {0,6} GB  {1,-30} {2}" -f $size, $bar, $dir) -ForegroundColor White
+    }
+}
+
+# ── 4. AppData Caches ──────────────────────────────────────────
+Write-Host "`n► APPDATA CACHE SIZES" -ForegroundColor Yellow
+$cacheTargets = @(
+    @{Name="Temp (User)";                Path="$profile\AppData\Local\Temp"},
+    @{Name="Thumbnails Cache";           Path="$profile\AppData\Local\Microsoft\Windows\Explorer"},
+    @{Name="Chrome Cache";              Path="$profile\AppData\Local\Google\Chrome\User Data\Default\Cache"},
+    @{Name="Edge Cache";                Path="$profile\AppData\Local\Microsoft\Edge\User Data\Default\Cache"},
+    @{Name="Firefox Cache";             Path="$profile\AppData\Local\Mozilla\Firefox\Profiles"},
+    @{Name="Spotify Cache";             Path="$profile\AppData\Local\Spotify\Storage"},
+    @{Name="Teams/Skype Media Cache";   Path="$profile\AppData\Roaming\Microsoft\Teams\Cache"},
+    @{Name="Windows Installer Cache";   Path="C:\Windows\Installer"},
+    @{Name="WinSxS (Component Store)";  Path="C:\Windows\WinSxS"}
+)
+foreach ($c in $cacheTargets) {
+    $size = Get-FolderSize $c.Path
+    if ($size -gt 0.05) {
+        Write-Host ("  {0,6} GB  → {1}" -f $size, $c.Name) -ForegroundColor White
+    }
+}
+
+# ── 5. Developer Junk ──────────────────────────────────────────
+Write-Host "`n► DEVELOPER JUNK FOLDERS" -ForegroundColor Yellow
+
+# node_modules
+$nodeMods = Get-ChildItem -Path $profile -Directory -Filter "node_modules" `
+    -Recurse -ErrorAction SilentlyContinue |
+    Select-Object -First 10
+if ($nodeMods) {
+    Write-Host "  Found $($nodeMods.Count)+ node_modules folder(s):" -ForegroundColor White
+    foreach ($nm in $nodeMods | Select-Object -First 5) {
+        $size = Get-FolderSize $nm.FullName
+        Write-Host "    $size GB  → $($nm.FullName)" -ForegroundColor Gray
+    }
+}
+
+# Python venvs
+$venvs = Get-ChildItem -Path $profile -Directory `
+    -Include ".venv","venv","env" -Recurse -ErrorAction SilentlyContinue
+if ($venvs) {
+    Write-Host "  Found $($venvs.Count) Python virtual environment(s)" -ForegroundColor White
+}
+
+# ── 6. Top 20 Largest Files on C: ─────────────────────────────
+Write-Host "`n► TOP 20 LARGEST FILES ON C:\" -ForegroundColor Yellow
+Get-ChildItem -Path "C:\" -Recurse -File -Force `
+    -ErrorAction SilentlyContinue |
+    Sort-Object Length -Descending |
+    Select-Object -First 20 FullName,
+        @{N="Size_GB";E={[math]::Round($_.Length/1GB,2)}},
+        LastWriteTime |
+    Format-Table -AutoSize
+
+# ── 7. Largest Files in Downloads ─────────────────────────────
+Write-Host "`n► DOWNLOADS FOLDER — FILES > 100 MB" -ForegroundColor Yellow
+Get-ChildItem -Path "$profile\Downloads" -Recurse -File `
+    -ErrorAction SilentlyContinue |
+    Where-Object { $_.Length -gt 100MB } |
+    Sort-Object Length -Descending |
+    Select-Object @{N="File";E={$_.Name}},
+        @{N="Size_GB";E={[math]::Round($_.Length/1GB,2)}},
+        LastWriteTime |
+    Format-Table -AutoSize
+
+Write-Host "`n═══════════════════════════════════" -ForegroundColor Cyan
+Write-Host " AUDIT COMPLETE" -ForegroundColor Cyan
+Write-Host " Review the output above and decide what to delete." -ForegroundColor Cyan
+Write-Host "═══════════════════════════════════`n" -ForegroundColor Cyan
+```
+
+---
+
+## Part 8: What Is Safe to Delete — The Definitive Table
+
+Use this as a reference every time you are not sure about a file or folder:
+
+| Location / File                                | Safe to Delete? | Notes                                                  |
+| :--------------------------------------------- | :-------------- | :----------------------------------------------------- |
+| `%TEMP%` (User temp folder)                    | ✅ Yes           | Skip files "in use" — Windows will warn you            |
+| `C:\Windows\Temp`                              | ✅ Yes           | Run as Admin                                           |
+| `C:\Windows\Prefetch\`                         | ✅ Yes (optional)| Apps load slightly slower after first boot             |
+| `C:\Windows.old\`                              | ✅ Yes           | Only present after Windows upgrade                     |
+| `C:\Windows\SoftwareDistribution\Download\`    | ✅ Yes           | Cached Windows Update downloads (re-downloads if needed)|
+| `Recycle Bin`                                  | ✅ Yes           | Empty it                                               |
+| `hiberfil.sys`                                 | ✅ If no hibernate| `powercfg /hibernate off` to remove                   |
+| `Downloads` folder old files                   | ✅ Review first  | Check before bulk deleting                             |
+| Browser cache folders                          | ✅ Yes           | Browser re-downloads as needed                         |
+| Spotify / Netflix / YouTube offline downloads  | ✅ Yes (optional)| Re-download anytime                                    |
+| `node_modules`                                 | ✅ Yes           | Run `npm install` to restore from `package.json`       |
+| Python `.venv` / `venv`                        | ✅ Yes           | Recreate with `pip install -r requirements.txt`        |
+| Unity `Library\` (inside project)              | ✅ Yes           | Unity rebuilds on next open (~10 min wait)             |
+| Docker unused images                           | ✅ Yes           | `docker system prune -a`                               |
+| `C:\Windows\WinSxS\`                           | ⚠️ Use DISM only | Never delete manually — use `Dism /Cleanup-Image`      |
+| `C:\Windows\Installer\`                        | ❌ No            | Required to modify/uninstall programs                  |
+| `C:\Users\<user>\AppData\`                     | ❌ No            | Contains app settings, configs, saved data             |
+| `C:\Program Files\`                            | ❌ No            | Use proper uninstaller                                 |
+| `pagefile.sys`                                 | ❌ No            | Windows virtual memory — do not delete                 |
+| Any `.dll` file in Windows or Program Files    | ❌ No            | Could break installed software                         |
+
+---
+
+## Part 9: The Recommended Cleanup Workflow (30 Minutes)
+
+Follow this order every 3–6 months for a complete disk refresh:
+
+### Step 1 — Quick Wins (5 minutes)
+
+```powershell
+# As Administrator:
+# 1. Empty temp folders
+Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+# 2. Empty Recycle Bin
+Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+
+# 3. Run Disk Cleanup with system files
+Start-Process cleanmgr -ArgumentList "/d C: /sageset:1" -Wait
+# After configuration, run it:
+Start-Process cleanmgr -ArgumentList "/d C: /sagerun:1" -Wait
+```
+
+### Step 2 — Visualize (10 minutes)
+
+- Download and run **WizTree**.
+- Scan C: drive — takes under 10 seconds.
+- Look at the treemap: what is the biggest block?
+- Switch to Files tab → find every file over 500 MB and decide: keep,
+  move to HDD, or delete.
+
+### Step 3 — Duplicates (10 minutes)
+
+- Run **dupeGuru** in Standard mode on your Documents and Downloads folders.
+- Run in Picture mode on your Photos/Pictures folder.
+- Review groups, delete confirmed duplicates.
+
+### Step 4 — DISM Cleanup (5 minutes, automated)
+
+```powershell
+Dism.exe /Online /Cleanup-Image /StartComponentCleanup
+```
+
+Let it run in the background. This is the safest way to shrink WinSxS.
+
+### Step 5 — Developer Cleanup (if applicable)
+
+- Run `npx npkill` in your projects root.
+- Run `docker system prune` if using Docker.
+- Delete Python venvs from abandoned projects.
+
+---
+
+## Summary: Which Tool for Which Job
+
+| Problem                                  | Best Tool                           | Free? |
+| :--------------------------------------- | :---------------------------------- | :---- |
+| "Where did my disk space go?"            | WizTree (fastest)                  | ✅     |
+| Open-source disk map                     | WinDirStat                         | ✅     |
+| Folder tree view, age analysis           | TreeSize Free                      | ✅     |
+| Exact duplicate files                    | AllDup or Auslogics                 | ✅     |
+| Similar photos (near-duplicates)         | dupeGuru (Picture mode)            | ✅     |
+| Browser caches, temp files               | BleachBit or Microsoft PC Manager  | ✅     |
+| Windows Update leftovers, WinSxS         | Disk Cleanup + DISM                | ✅     |
+| node_modules cleanup                     | npkill (npm)                       | ✅     |
+| Docker images and volumes                | `docker system prune`              | ✅     |
+| Systematic, automated audit              | PowerShell audit script (above)    | ✅     |
+| Hands-off automatic monthly cleanup      | Storage Sense (built-in)           | ✅     |
+| AI-assisted photo near-duplicate removal | Duplicate Cleaner Pro              | 💰     |
+
+**Every tool listed as free is genuinely free** with no essential features
+locked behind a paywall. Start with WizTree for situational awareness, add
+dupeGuru for duplicates, and use the PowerShell audit script for a
+developer-grade deep dive — and you will know exactly where every gigabyte
+on your disk has been hiding.
