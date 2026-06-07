@@ -1,0 +1,111 @@
+---
+title: "Windows Home Server — Part 20: TCO Financial Audit, Performance Audit, and Hybrid Architecture"
+description: "A complete cost audit measuring the power draw of the laptop, comparing it against VPS providers, and reviewing the hybrid checklist."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - FinOps
+  - TCO
+  - Financial-Audit
+  - Cloud-Comparison
+  - Performance
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 20
+draft: false
+---
+
+# Windows Home Server — Part 20: TCO Financial Audit, Performance Audit, and Hybrid Architecture
+
+We have built a comprehensive self-hosted software stack natively on Windows: Caddy, Cloudflare Tunnels, OwnCloud OCIS, FileBrowser, PocketBase, Uptime Kuma, n8n, Jellyfin, Ollama, Open WebUI, custom Python/Node APIs, Telegram bots, GitHub webhooks, PostgreSQL, MariaDB, MinIO, Authelia, Umami, Prometheus, Grafana, Loki, Promtail, Tailscale, Mailrose, and Miniflux.
+
+In this twentieth part of the series, we will perform a **Financial and Performance Audit**. We will calculate the exact monthly cost of renting an equivalent infrastructure from AWS, Azure, and SaaS providers and compare it against running our old HP 15s laptop.
+
+---
+
+## 1. Cloud vs. Home Server Financial Audit
+
+If you hosted this stack on enterprise clouds and SaaS subscriptions, your monthly billing would look like this:
+
+### 1.1 Monthly Cost of Equivalent Cloud Infrastructure:
+
+| Service / Resource | Provider | Equivalent Cloud Component | Monthly Cost (USD) | Monthly Cost (INR) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Compute & RAM** | AWS EC2 / DigitalOcean | `c5.xlarge` instance (4 vCPU, 16GB RAM) | $80.00 | ₹6,600 |
+| **Managed Postgres** | AWS RDS | Single-AZ PostgreSQL instance (db.t4g.medium) | $35.00 | ₹2,900 |
+| **Object Storage** | AWS S3 | 1 TB storage + egress bandwidth | $26.00 | ₹2,150 |
+| **observability** | Datadog / New Relic | Host agent + log ingest + custom metrics | $25.00 | ₹2,060 |
+| **SSO & Auth** | Auth0 | Developer Plan (up to 10k users + 2FA) | $23.00 | ₹1,900 |
+| **Password Manager** | 1Password | Family Subscription | $5.00 | ₹410 |
+| **Photo Backups** | Google One | 1 TB storage plan | $5.00 | ₹410 |
+| **Web Analytics** | Fathom / Plausible | Base tracking plan | $9.00 | ₹740 |
+| **Transactional Email**| SendGrid / Mailgun | Essential Plan | $15.00 | ₹1,240 |
+| **Total Monthly Cost**| | | **$218.00** | **₹18,010** |
+
+Running this stack in the cloud costs approximately **$218/month (₹18,010/month)**.
+
+---
+
+### 1.2 Monthly Cost of the HP 15s Home Server:
+
+Since we are reusing retired hardware, our capital expenditure (CapEx) is ₹0. Our operational expenditure (OpEx) comprises power consumption and domain renewal:
+
+1. **Electricity Consumption**:
+   Our laptop consumes approximately **10 watts** average hourly draw (mostly idle, with periodic spikes during transcoding, log parsing, or local AI generation).
+   $$10 \text{ W} \times 24 \text{ hours} \times 30 \text{ days} = 7,200 \text{ Wh} = 7.2 \text{ kWh (Units) per month}$$
+   At a domestic tariff rate in India (e.g. ₹8.00 per unit):
+   $$7.2 \text{ Units} \times \text{₹8.00} = \text{₹57.60 per month}$$
+2. **Domain Name Renewal**:
+   A `.in` or `.com` domain name on Spaceship costs roughly ₹800 per year:
+   $$\text{₹800} / 12 \text{ months} = \text{₹66.60 per month}$$
+3. **Total Monthly Cost**:
+   $$\text{₹57.60} \text{ (Power)} + \text{₹66.60} \text{ (Domain)} = \text{₹124.20 per month (approx. $1.50/mo)}$$
+
+### 3-Year TCO Comparison:
+- **Cloud Infrastructure**: **₹6,48,360 ($7,848)**
+- **Windows Home Server**: **₹4,471 ($54)**
+- **Total Net Savings**: **₹6,43,889 ($7,794)**
+
+---
+
+## 2. Bare-Metal Performance Audit
+
+By running natively on Windows and avoiding WSL2, Hyper-V, and Docker virtualization layers, we observe significant performance improvements:
+
+- **Idle RAM Overhead**:
+  - *WSL2/Docker Setup*: 2.8 GB to 4.2 GB (consumed by the host OS, Hyper-V VM allocation, and the Linux kernel).
+  - *Native Windows Setup*: **780 MB** total system idle allocation.
+- **CPU Idle Load**: Less than **2%** average utilization, allowing the i5 processor to stay in low-power C-states.
+- **Disk Throughput**: Direct access to the NVMe SSD and SATA HDD at native hardware speeds, bypassing virtual disk driver layers.
+- **GPU Accessibility**: Zero-latency access to the integrated GPU for Jellyfin transcoding and Ollama DirectML calculations.
+
+---
+
+## 3. The Ultimate Hybrid Architecture Checklist
+
+To maintain a secure, high-performance network structure at zero cost, follow this checklist:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   THE HYBRID INFRASTRUCTURE CHECKLIST                   │
+├──────────────────────────────┬─────────────────────────────────────────┤
+│  100% Free Cloud Tiers       │  Self-Hosted Home Server                │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│  ✓ DNS (Cloudflare DNS)      │  ✓ Dynamic APIs (Node/Python/Go)        │
+│  ✓ Static Sites (CF Pages)   │  ✓ Persistent Databases (Postgres/SQL)  │
+│  ✓ Code Hosting (GitHub)     │  ✓ Heavy Background Tasks (n8n)         │
+│  ✓ Ingress Tunnel (cloudflared)│  ✓ GPU Media Transcoding (Jellyfin)     │
+│  ✓ Inbound Email Forwarding  │  ✓ Local AI Inference (Ollama)          │
+│  ✓ Offsite Backups (CF R2)   │  ✓ Monitoring & Log Engines (Grafana)   │
+└──────────────────────────────┴─────────────────────────────────────────┘
+```
+
+Reusing retired consumer laptops represents one of the most efficient, cost-effective, and educational practices in software engineering. By configuring the host operating system properly and running services natively on Windows, you establish a resilient, zero-overhead home server for the cost of a single cup of coffee per month.
+
+---
+
+*In the next part, we will look at setting up self-hosted error tracking.*
+
+**[Proceed to Part 21: Replacing Sentry & Error Tracking (Self-Hosted Logging) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

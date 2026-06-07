@@ -1,0 +1,78 @@
+---
+title: "Part 15: Equity Cash & MTF Swing Trading"
+description: "How to swing trade Stage 2 stock breakouts using Relative Strength and leverage your buying power up to 4x using Margin Trading Facility (MTF)."
+pubDate: 2026-06-07
+tags:
+  - Equity Cash
+  - Swing Trading
+  - MTF Leverage
+  - Relative Strength
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 15
+draft: false
+---
+
+# Part 15: Equity Cash & MTF Swing Trading
+
+While derivatives (F&O) expire and suffer from theta decay, the **equity cash**
+market allows you to buy physical shares of companies and hold them. However,
+swing trading in cash requires significant capital to make meaningful absolute returns.
+This is where **Margin Trading Facility (MTF)** comes in, allowing retail traders to
+leverage their equity swing trades up to 4x.
+
+---
+
+## 1. Swing Trading Setup: Stage 2 Breakouts + RS
+
+To swing trade successfully, we focus only on stocks in structural uptrends
+(Stage 2) that are outperforming the index.
+
+- **Base Universe:** Nifty 500 stocks.
+- **Filters:**
+  1. **Stage 2 Check:** Price must be above both the 50-day and 200-day Simple Moving Average (SMA).
+  2. **Relative Strength (RS):** The stock's RS line (ratio of Stock Price / Nifty 50 Index) must be trending up, showing it is outperforming the benchmark.
+- **Entry Rules:**
+  1. Identify a consolidation base (e.g. flat base, cup and handle, VCP).
+  2. Enter on a daily breakout above the resistance line on volume $> 1.5\text{x}$ the 20-day average volume.
+- **Stop Loss:** Strict stop-loss at 8% from entry or 2.5x the 14-day ATR (Average True Range).
+- **Target:** Exit at a 20-25% gain or trail using the 10-day EMA.
+
+---
+
+## 2. Leveraging with Margin Trading Facility (MTF)
+
+MTF is an exchange-approved leverage product offered by Indian brokers (e.g., Dhan,
+mStock, Fyers).
+
+- **How it Works:** Instead of paying 100% cash, you pay a margin of 20% to 25%
+  (depending on the stock category). The broker funds the remaining 75% to 80%.
+  - *Example:* With ₹1,00,000 cash, you can buy ₹4,00,000 worth of approved shares.
+- **Interest Cost:** The broker charges interest on the funded amount, typically
+  ranging from **8.99% to 15% p.a.** (calculated daily).
+- **Pledge Process:** SEBI rules require that you **pledge** the shares purchased
+  under MTF by 9:00 PM on T-day using CDSL OTP verification. Failure to pledge
+  results in the trade being converted to regular delivery (which requires 100% cash)
+  or square off.
+
+---
+
+## 3. MTF Risk Management & Margin Calls
+
+Leverage is a double-edged sword. A 10% drop in stock price on 4x leverage leads
+to a **40% loss** on your capital.
+
+- **Interest Drag:** Since interest is accrued daily, MTF swing trades are best
+  held for short periods (5 to 30 days). If a stock goes sideways for months,
+  interest will eat your profits.
+- **Margin Maintenance:** If the stock price drops, your collateral value drops.
+  If your margin falls below the broker's minimum requirement, you will receive
+  a **Margin Call**. You must add cash immediately, or the broker will liquidate
+  your shares at market price.
+- **Diversification Rule:** Never put all your MTF exposure into a single stock.
+  Spread leverage across 4-5 liquid Nifty 500 shares.
+
+In the next part, we cover SEBI compliance, AdSense, and our final production checklist.
+
+**[Proceed to Part 16: Legal Compliance, AdSense, and Production Launch Checklist →](/blog/wealth-and-options-automation/part-16-compliance-adsense-launch-checklist)**

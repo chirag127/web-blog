@@ -1,0 +1,95 @@
+---
+title: "Part 5: Coding vs. Managed Platforms: The Ultimate Algo-Trading Guide"
+description: "Should you write your own Python bot or deploy on managed platforms? Evaluate the trade-offs of cost, speed, and platform risk."
+pubDate: 2026-06-07
+tags:
+  - Algo Trading
+  - Python
+  - Tradetron
+  - AlgoTest
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 5
+draft: false
+---
+
+# Part 5: Coding vs. Managed Platforms: The Ultimate Algo-Trading Guide
+
+When automating your options strategy, you face a major architectural decision:
+**Should you write a custom Python bot from scratch, or should you deploy using a
+managed no-code platform?**
+
+Let's evaluate the trade-offs in detail.
+
+---
+
+## 1. The Developer Approach: Custom Python Bot
+
+For software developers, writing your own bot is the natural path. You write code
+that fetches market data, evaluates strategy logic, and places orders via the
+broker's API.
+
+### Pros:
+*   **100% Free Infrastructure:** By running on GitHub Actions scheduled workflows
+    and storing state in a free edge database (like Turso), your operational cost is
+    exactly **₹0/month**.
+*   **Infinite Customization:** You can code complex risk controls, multi-step
+    adjustments, custom calculations (like implied volatility surfaces using
+    `py_vollib`), and write to custom logging schemas.
+*   **No Platform Risk:** You don't rely on a third-party platform's uptime or pricing
+    changes.
+
+### Cons:
+*   **Development Overhead:** You must handle authentication, API rate limits, error
+    recovery, and token refreshes.
+*   **Harder Backtesting:** Testing your strategy against historical options data
+    requires sourcing expensive tick files and writing a custom event-driven engine.
+
+---
+
+## 2. The Managed Platform Approach (AlgoTest / Tradetron)
+
+Managed platforms allow you to build strategies using a visual drag-and-drop builder.
+The platform handles API authentication, order routing, and provides historical data
+for backtesting.
+
+### Pros:
+*   **Instant Backtesting:** Platforms like AlgoTest allow you to test your strategy
+    against 5+ years of historical F&O data in seconds.
+*   **Speed to Live:** You can build, test, and deploy a strategy in under 30 minutes
+    without writing a single line of code.
+*   **Built-in Risk Controls:** Features like portfolio-level trailing stop-loss or
+    execution delays are pre-configured.
+
+### Cons:
+*   **Recurring Subscription Costs:** While most offer free paper trading or limited
+    credits, live trading typically costs ₹300 to ₹1,500/month.
+*   **Black Box Execution:** If the platform goes down during market hours (a common
+    issue on high-volatility days), your stop-losses may fail, exposing you to unmanaged
+    risk.
+*   **Feature Limitations:** You are limited to the strategy blocks and rules
+    supported by the platform.
+
+---
+
+## 3. Comparison Summary
+
+| Criteria | Self-Coded (Python + Turso) | Managed (AlgoTest / Tradetron) |
+| :--- | :--- | :--- |
+| **Setup Cost** | **₹0** | Free trial, then ₹499 - ₹1,200/month |
+| **Development Time** | 20 - 40 hours | < 1 hour |
+| **Backtesting Ease** | Complex (Requires CSV files) | **Instant** (One-click) |
+| **Execution Control** | Full (Control over order types/slices) | Limited to platform blocks |
+| **Risk Management** | Custom coded (Reliant on your logic) | Automated (Platform fail-safes) |
+
+For beginners, the recommended approach is a **hybrid workflow**:
+1.  Use a managed platform (like **AlgoTest**) to backtest your strategies and
+    validate their performance.
+2.  Once you have a proven strategy, write a **custom Python bot** running on
+    GitHub Actions to execute it for free, eliminating platform costs and limitations.
+
+In the next part, we will look at how to set up and configure these managed platforms
+for free.
+
+**[Proceed to Part 6: Deep Dive into Managed Platforms: AlgoTest & Tradetron →](/blog/wealth-and-options-automation/part-06-deep-dive-managed-algo-platforms)**

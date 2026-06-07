@@ -1,0 +1,91 @@
+---
+title: "Windows Home Server — Part 22: Replacing Statuspage.io & Status Pages (Uptime Kuma Status)"
+description: "Create public, white-labeled status pages for your services natively using Uptime Kuma, without paying for third-party hosting."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Uptime-Kuma
+  - Status-Pages
+  - Caddy
+  - Caddyfile
+  - Self-Hosting
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 22
+draft: false
+---
+
+# Windows Home Server — Part 22: Replacing Statuspage.io & Status Pages (Uptime Kuma Status)
+
+Incident communication is essential when hosting APIs and web applications. However, paid status page widgets like Statuspage.io or Statuscake charge significant fees for custom domains, branding options, and subscriber notification lists.
+
+We can run our own public, branded status page using our native **Uptime Kuma** instance. We will configure a custom status page, customize its branding, and write a **Caddy rewrite rule** to map a subdomain (like `status.yourdomain.com`) directly to the status page.
+
+---
+
+## 1. Creating the Uptime Kuma Status Page
+
+1. Open your Uptime Kuma admin panel (e.g. `http://localhost:3001`).
+2. In the top navigation bar, click **Status Pages**.
+3. Click **New Status Page**.
+4. Configure the page settings:
+   - **Name**: `Oriz Services Status`
+   - **Slug**: `status`
+5. Drag and drop the monitors you want to display (like your Caddy proxy, Python API, Node Dashboard, and databases).
+6. Customize the page: add custom links back to your company website, write a description, and select the dark theme.
+7. Click **Save**.
+
+Your status page is now internally available at `http://localhost:3001/status/status`.
+
+---
+
+## 2. Mapping Subdomain and URI Rewrites in Caddy
+
+By default, Uptime Kuma hosts the status page at `/status/status`. We want users to see the page when they visit the root URL `status.yourdomain.com` without needing to append path arguments.
+
+We can implement this by writing a Caddy URL rewrite rule.
+
+Open `C:\Server\caddy\Caddyfile` and modify or add the status subdomain block:
+
+```caddy
+status.yourdomain.com {
+    # Rewrite root path '/' requests to Uptime Kuma's status page endpoint
+    rewrite / /status/status
+    
+    # Reverse proxy all requests to Uptime Kuma
+    reverse_proxy localhost:3001 {
+        header_up Host {host}
+    }
+}
+```
+
+Restart Caddy to apply:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 3. Configuring Subscriber Alerts via Mailrise
+
+Uptime Kuma supports sending alerts to you when services go down. To configure this:
+
+1. In the Uptime Kuma dashboard, go to **Settings** → **Notifications** → **Setup Notification**.
+2. Select **Email (SMTP)** as the type.
+3. Configure the SMTP server settings to point to your native **Mailrise** instance from Part 18:
+   - **Hostname**: `localhost`
+   - **Port**: `8025`
+   - **Security**: **None** (internal local connection)
+   - **To Email**: `telegram@mailrise.xyz`
+4. Test the notification. Mailrise will catch the email, translate it, and route it straight to your Telegram bot.
+
+By implementing this, you get a clean, public-facing status page under your domain and automated system alert push notifications—replacing paid status page subscriptions for free.
+
+---
+
+*In the next part, we will replace paid live support chat services like Intercom.*
+
+**[Proceed to Part 23: Replacing Intercom & Live Chat (Self-Hosted Support Chat) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

@@ -1,0 +1,235 @@
+---
+title: "Windows Home Server — Part 11: Replacing Auth0 and Google Analytics (Identity Management & Privacy Analytics)"
+description: "Eliminate SaaS subscription limits. Deploy Authelia for single sign-on (SSO) and Umami (on SQLite) for web traffic analytics."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Authelia
+  - Umami
+  - Identity
+  - SSO
+  - Web-Analytics
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 11
+draft: false
+---
+
+# Windows Home Server — Part 11: Replacing Auth0 and Google Analytics (Identity Management & Privacy Analytics)
+
+Managed authentication services like Auth0 and user tracking services like Google Analytics or Hotjar introduce privacy concerns and limits on monthly active users (MAU).
+
+We can bypass these restrictions by running our own authorization and web telemetry engines natively on Windows. We will set up **Authelia**—a lightweight Go-based Single Sign-On (SSO) portal—to protect our private home server dashboards behind 2FA (Two-Factor Authentication). We will then deploy **Umami** (connected to our local PostgreSQL database) to replace Google Analytics with a privacy-first web analytics platform.
+
+---
+
+## 1. Zero-Trust Subdomain Protection: Authelia
+
+Authelia is a companion security portal. When a user requests access to a protected subdomain (like `dashboard.yourdomain.com`), Caddy forwards the request headers to Authelia. If the user is logged in, Authelia replies with a `200 OK` status, and Caddy loads the app. If not, Authelia redirects the user to `auth.yourdomain.com` to log in.
+
+```
+                  [Request to dashboard.yourdomain.com]
+                                   │
+                                   ▼
+                            [Caddy Server]
+                                   │
+                       (Forward Auth Check Request)
+                                   │
+                                   ▼
+               Authorized? ──> [Authelia:9091]
+               /         \
+            (Yes)        (No)
+             /             \
+            ▼               ▼
+     [Proxy to App]    [Redirect to auth.yourdomain.com]
+```
+
+### Step 1: Download Authelia
+Download the native Windows executable:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\authelia"
+Invoke-WebRequest -Uri "https://github.com/authelia/authelia/releases/download/v4.38.0/authelia-v4.38.0-windows-amd64.zip" -OutFile "C:\Server\authelia\authelia.zip"
+Expand-Archive -Path "C:\Server\authelia\authelia.zip" -DestinationPath "C:\Server\authelia" -Force
+Move-Item "C:\Server\authelia\authelia.exe" -Destination "C:\Server\bin\authelia.exe" -Force
+Remove-Item "C:\Server\authelia\authelia.zip" -Force
+```
+
+### Step 2: Configure Authelia
+Create `C:\Server\authelia\configuration.yml`. This contains settings for session management, user credentials, and password policies:
+
+```yaml
+theme: dark
+jwt_secret: "generate_a_random_32_character_string_for_jwt"
+default_redirection_url: https://dashboard.yourdomain.com
+
+server:
+  host: 127.0.0.1
+  port: 9091
+
+log:
+  level: info
+  format: text
+  file_path: C:\Server\logs\authelia.log
+
+totp:
+  issuer: homeserver.local
+
+authentication_backend:
+  file:
+    path: C:\Server\authelia\users.yml
+    password:
+      algorithm: argon2
+
+session:
+  name: authelia_session
+  same_site: lax
+  secret: "generate_a_secure_session_secret_key"
+  expiration: 1h
+  inactivity: 30m
+  domain: yourdomain.com
+
+storage:
+  local:
+    path: C:\Server\authelia\db.sqlite3
+
+notifier:
+  filesystem:
+    filename: C:\Server\authelia\notification.txt
+```
+
+Create a user credentials file `C:\Server\authelia\users.yml` to define your username:
+
+```yaml
+# Password hash generated using argon2
+users:
+  admin:
+    displayname: "Administrator"
+    # To generate password hash: authelia hash-password "yourPassword"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$2q1z4x..."
+    email: admin@yourdomain.com
+    groups:
+      - admins
+```
+
+### Step 3: Wrap Authelia in NSSM
+Create the service:
+
+```powershell
+nssm install Authelia C:\Server\bin\authelia.exe "--config C:\Server\authelia\configuration.yml"
+nssm set Authelia AppDirectory "C:\Server\authelia"
+nssm start Authelia
+```
+
+### Step 4: Caddy Integration for Intercepting Requests
+Update `C:\Server\caddy\Caddyfile` to add the forward-auth middleware configuration:
+
+```caddy
+# Forward Auth template block
+(forward_auth) {
+    forward_auth localhost:9091 {
+        uri /api/verify?rd=https://auth.yourdomain.com/
+        copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+    }
+}
+
+# Authelia Login Domain
+auth.yourdomain.com {
+    reverse_proxy localhost:9091
+}
+
+# Protected Subdomain
+dashboard.yourdomain.com {
+    # Intercept traffic and check credentials via Authelia
+    import forward_auth
+    
+    # If authorized, load the dashboard
+    reverse_proxy localhost:3000
+}
+```
+
+Restart Caddy:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 2. Privacy-First Analytics: Umami
+
+Umami is a self-hosted alternative to Google Analytics. It is lightweight, GDPR-compliant, does not use cookies, and collects no personally identifiable information (PII).
+
+### Step 1: Install Umami Natively
+Umami runs on Node.js and requires a PostgreSQL database.
+
+Create a database and user in PostgreSQL (use pgAdmin or the CLI tool `psql.exe`):
+
+```sql
+CREATE DATABASE umami;
+CREATE USER umami_user WITH PASSWORD 'secureDBPassword';
+GRANT ALL PRIVILEGES ON DATABASE umami TO umami_user;
+```
+
+Clone the repository and build:
+
+```powershell
+git clone https://github.com/umami-software/umami.git C:\Server\umami
+cd C:\Server\umami
+npm install
+```
+
+### Step 2: Configure Environment Variables
+Create `C:\Server\umami\.env`:
+
+```env
+PORT=3010
+HOSTNAME=127.0.0.1
+DATABASE_URL="postgresql://umami_user:secureDBPassword@localhost:5432/umami"
+# Generate a random secret
+APP_SECRET="generate_a_random_32_character_analytics_secret"
+```
+
+Build the application database schemas and frontend assets:
+
+```powershell
+npm run build
+```
+
+### Step 3: Wrap Umami in NSSM
+Create a startup script `C:\Server\umami\start-umami.ps1`:
+
+```powershell
+cd C:\Server\umami
+npm start
+```
+
+Create the Windows Service:
+
+```powershell
+nssm install Umami powershell.exe "-ExecutionPolicy Bypass -File C:\Server\umami\start-umami.ps1"
+nssm start Umami
+```
+
+### Step 4: Caddy Routing
+Map Umami to a subdomain in your `Caddyfile`:
+
+```caddy
+analytics.yourdomain.com {
+    reverse_proxy localhost:3010
+}
+```
+
+Restart Caddy (`nssm restart Caddy`). 
+
+Log into `https://analytics.yourdomain.com` (default credentials: username `admin`, password `umami`), create a new website tracking target, copy the generated tracking script, and paste it into the `<head>` of your public websites. 
+
+By replacing Google Analytics and Auth0, you regain complete control over user data and telemetry, removing tracking scripts and paid SaaS limits for free.
+
+---
+
+*In the next part, we will replace paid metrics monitoring platforms like Datadog.*
+
+**[Proceed to Part 12: Replacing Datadog & CloudWatch (Bare-Metal Observability) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

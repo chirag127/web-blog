@@ -1,0 +1,226 @@
+---
+title: "Windows Home Server — Part 7: Multi-Subdomain Ingress & Web App Hosting"
+description: "Host multiple dynamic subdomains (api.yourdomain.com, dashboard.yourdomain.com) on different local ports using a single Caddy reverse-proxy instance, while keeping the corporate website on Cloudflare Pages for free."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Caddy
+  - Networking
+  - Dynamic-Hosting
+  - Cloudflare-Pages
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 7
+draft: false
+---
+
+# Windows Home Server — Part 7: Multi-Subdomain Ingress & Web App Hosting
+
+When launching products, developers often pay for multiple VPS nodes or cloud instances to host backends, frontends, and dashboards. 
+
+By combining free cloud services with a self-hosted Windows server, you can build a hybrid network structure for free. We will keep our main company website hosted on **Cloudflare Pages (Free Tier)** for static performance and route dynamic operations—like APIs, dashboards, and databases—to specific subdomains running natively on different ports of our Windows home server.
+
+---
+
+## 1. The Hybrid Ingress Blueprint
+
+Our traffic routing isolates the static frontend from the dynamic backends:
+
+```
+                  ┌───────────────────────┐
+                  │   User Request        │
+                  └──────────┬────────────┘
+                             │
+            ┌────────────────┴────────────────┐
+            ▼                                 ▼
+   [Apex: yourdomain.com]           [Subdomain: api.yourdomain.com]
+   (Cloudflare Pages - Free)        (Cloudflare Tunnel Agent - Free)
+            │                                 │
+   [Pre-rendered HTML/JS]                     ▼
+                                     [Windows Home Server]
+                                              │
+                                    (Caddy Reverse Proxy: 80)
+                                              │
+                         ┌────────────────────┴────────────────────┐
+                         ▼                                         ▼
+                 [Local Port: 5000]                        [Local Port: 3000]
+                 (Python FastAPI)                          (Node.js Dashboard)
+```
+
+1. **yourdomain.com** (Apex) & **www.yourdomain.com**: Hosted on **Cloudflare Pages** (unlimited bandwidth, edge CDN caching, 100% free).
+2. **api.yourdomain.com**: Points to your home server's local Python API (running on port `5000`).
+3. **dashboard.yourdomain.com**: Points to your home server's local Node.js App (running on port `3000`).
+
+---
+
+## 2. Multi-Subdomain Caddy Configuration
+
+Caddy's reverse-proxy block syntax makes it extremely easy to route multiple domains. Caddy reads the HTTP headers of incoming requests and matches them to the correct local port.
+
+Open `C:\Server\caddy\Caddyfile` and replace or append the following configuration:
+
+```caddy
+# Global configuration block
+{
+    meta_dir C:\Server\caddy\metadata
+    cert_dir C:\Server\caddy\certificates
+}
+
+# 1. Dynamic REST API (Python/FastAPI listening on port 5000)
+api.yourdomain.com {
+    # CORS headers: Allow your static frontend (Cloudflare Pages) to fetch data
+    header {
+        Access-Control-Allow-Origin "https://yourdomain.com"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Accept, Content-Type, Authorization"
+        Access-Control-Allow-Credentials "true"
+        defer
+    }
+    
+    # Handle preflight CORS OPTIONS requests directly in Caddy for speed
+    @options {
+        method OPTIONS
+    }
+    respond @options 204
+
+    reverse_proxy localhost:5000
+}
+
+# 2. Dynamic Web Dashboard (Node.js/Express listening on port 3000)
+dashboard.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+
+# 3. Microservice / Webhook Receiver (Bun listening on port 4000)
+hooks.yourdomain.com {
+    reverse_proxy localhost:4000
+}
+```
+
+*Make sure to replace `yourdomain.com` with your registered domain.*
+
+Restart Caddy to load the changes:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 3. Running the Multi-App Stack Natively
+
+Let's write two lightweight dynamic applications to test our reverse-proxy routing: a Python FastAPI backend and a Node.js dashboard.
+
+### 3.1 Python FastAPI Application (Port 5000)
+Create a directory `C:\Server\apps\api\` and set up a Python virtual environment:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\api"
+cd C:\Server\apps\api
+python -m venv venv
+.\venv\Scripts\pip install fastapi uvicorn
+```
+
+Create the application code file `C:\Server\apps\api\main.py`:
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/status")
+def read_status():
+    return {"status": "online", "hardware": "HP 15s Bare-Metal", "port": 5000}
+```
+
+Create a startup script `C:\Server\apps\api\start-api.ps1`:
+
+```powershell
+cd C:\Server\apps\api
+.\venv\Scripts\uvicorn main:app --host 127.0.0.1 --port 5000
+```
+
+Register the Python API as a service:
+
+```powershell
+nssm install PythonAPI powershell.exe "-ExecutionPolicy Bypass -File C:\Server\apps\api\start-api.ps1"
+nssm start PythonAPI
+```
+
+---
+
+### 3.2 Node.js Dashboard Application (Port 3000)
+Create a directory `C:\Server\apps\dashboard\`:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\dashboard"
+cd C:\Server\apps\dashboard
+npm init -y
+npm install express
+```
+
+Create `C:\Server\apps\dashboard\server.js`:
+
+```javascript
+const express = require('express');
+const app = express();
+const PORT = 3000;
+
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head><title>Admin Dashboard</title></head>
+            <body style="font-family: sans-serif; background: #121212; color: #fff; padding: 2rem;">
+                <h1>Server Administration Dashboard</h1>
+                <p>Status: <span style="color: #4caf50;">Running</span></p>
+                <div id="api-status">Loading API status...</div>
+                <script>
+                    fetch('https://api.yourdomain.com/status')
+                        .then(res => res.json())
+                        .then(data => {
+                            document.getElementById('api-status').innerHTML = 
+                                'Connected to API. Hardware: ' + data.hardware;
+                        })
+                        .catch(err => {
+                            document.getElementById('api-status').innerHTML = 'API offline.';
+                        });
+                </script>
+            </body>
+        </html>
+    `);
+});
+
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Dashboard running on port ${PORT}`);
+});
+```
+
+Create a startup script `C:\Server\apps\dashboard\start-dashboard.ps1`:
+
+```powershell
+cd C:\Server\apps\dashboard
+node server.js
+```
+
+Register the Node dashboard as a service:
+
+```powershell
+nssm install NodeDashboard powershell.exe "-ExecutionPolicy Bypass -File C:\Server\apps\dashboard\start-dashboard.ps1"
+nssm start NodeDashboard
+```
+
+---
+
+## 4. Verifying Subdomain Ingress
+
+1. Ensure the Cloudflare Tunnel is running (which handles wildcard ingress routing as set up in Part 2).
+2. Open your browser and navigate to `https://dashboard.yourdomain.com`.
+3. The dashboard should load, and the client-side JavaScript will successfully make a cross-origin (CORS) request to fetch the backend status from `https://api.yourdomain.com/status`—confirming that our multi-subdomain routing and CORS headers are perfectly configured.
+
+---
+
+*In the next part, we will build a custom Telegram Bot and route its webhooks natively.*
+
+**[Proceed to Part 8: Self-Hosting Telegram Bots, Webhooks, and Event-Driven Services →](/blog/windows-native-home-server/part-8-telegram-bots-webhooks)**

@@ -1,0 +1,131 @@
+---
+title: "Windows Home Server — Part 19: Replacing Paid Read-it-Later & RSS Services (Pocket, Feedly Premium)"
+description: "Install Miniflux or Wallabag natively on Windows to manage your RSS feeds and save articles for offline reading."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Miniflux
+  - RSS-Reader
+  - Go
+  - Databases
+  - Self-Hosting
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 19
+draft: false
+---
+
+# Windows Home Server — Part 19: Replacing Paid Read-it-Later & RSS Services (Pocket, Feedly Premium)
+
+Using paid services like Feedly Premium or Pocket to aggregate news feeds and save articles for offline reading can get expensive when you hit their subscription paywalls.
+
+We can run our own fast, zero-overhead RSS aggregator natively on Windows for free. We will install **Miniflux**—an extremely minimalist, high-speed RSS reader written in Go. It compiles into a single executable, integrates with our local PostgreSQL database, consumes **less than 15 MB of RAM**, and supports the Fever and Miniflux APIs to sync with free mobile reader apps.
+
+---
+
+## 1. Directory and Database Setup
+
+Miniflux requires a PostgreSQL database to store feeds, user accounts, and article states.
+
+### Step 1: Create the Database
+Open your PostgreSQL terminal (`psql.exe`) or pgAdmin and run:
+
+```sql
+CREATE DATABASE miniflux;
+CREATE USER miniflux_user WITH PASSWORD 'secureDBPassword';
+GRANT ALL PRIVILEGES ON DATABASE miniflux TO miniflux_user;
+```
+
+### Step 2: Download Miniflux
+Create the configuration folder and download the Windows binary from the official releases:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\miniflux"
+
+# Download binary
+Invoke-WebRequest -Uri "https://github.com/miniflux/v2/releases/download/2.1.1/miniflux-windows-amd64.exe" -OutFile "C:\Server\bin\miniflux.exe"
+```
+
+Verify it runs:
+
+```powershell
+C:\Server\bin\miniflux.exe --version
+```
+
+---
+
+## 2. Initializing and running Miniflux
+
+Miniflux is configured using environment variables. We will define these in a PowerShell script.
+
+### Step 1: Create the Startup Script
+Create `C:\Server\miniflux\start-miniflux.ps1`:
+
+```powershell
+# Configurations
+$env:DATABASE_URL = "postgres://miniflux_user:secureDBPassword@localhost:5432/miniflux?sslmode=disable"
+$env:LISTEN_ADDR = "127.0.0.1:8088"
+$env:RUN_MIGRATIONS = "1"  # Auto-apply database schemas on start
+
+# Set up the initial administrator user (uncomment for the first run, then disable)
+$env:CREATE_ADMIN = "1"
+$env:ADMIN_USERNAME = "adminUsername"
+$env:ADMIN_PASSWORD = "adminSecurePassword"
+
+# Launch Miniflux
+C:\Server\bin\miniflux.exe
+```
+
+### Step 2: Wrap Miniflux in NSSM
+Create the service:
+
+```powershell
+nssm install Miniflux powershell.exe "-ExecutionPolicy Bypass -File C:\Server\miniflux\start-miniflux.ps1"
+nssm set Miniflux AppDirectory "C:\Server\miniflux"
+nssm start Miniflux
+```
+
+Miniflux will apply database migrations and begin listening on local port `8088`.
+
+---
+
+## 3. Caddy Ingress Routing
+
+Open `C:\Server\caddy\Caddyfile` and assign a subdomain:
+
+```caddy
+reader.yourdomain.com {
+    reverse_proxy localhost:8088
+}
+```
+
+Restart Caddy:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 4. Syncing with Mobile Applications
+
+Miniflux has built-in support for the **Fever API** protocol, letting you connect standard mobile news clients (like Reeder or NetNewsWire on iOS, or FeedMe on Android) to your server for free:
+
+1. Log into your Miniflux web interface at `https://reader.yourdomain.com`.
+2. Go to **Settings** → **Integrations**.
+3. Check **Enable Fever API**.
+4. Set a dedicated **Fever Password**.
+5. Open your mobile app, select **Fever** as the account type, and enter:
+   - **Server URL**: `https://reader.yourdomain.com/fever/`
+   - **Username**: Your Miniflux username.
+   - **Password**: The Fever password you set in step 4.
+
+By running Miniflux natively on your Windows server, you get a clean, high-performance RSS reader that syncs across all your devices for free.
+
+---
+
+*In the next part, we will review our Total Cost of Ownership (TCO) and perform a comprehensive audit.*
+
+**[Proceed to Part 20: TCO Financial Audit, Performance Audit, and Hybrid Architecture →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

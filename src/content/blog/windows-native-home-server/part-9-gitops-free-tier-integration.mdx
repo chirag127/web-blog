@@ -1,0 +1,201 @@
+---
+title: "Windows Home Server — Part 9: PaaS Replacements & GitOps (Heroku/Railway Alternatives)"
+description: "Build a 100% free auto-deployment pipeline. Configure GitHub Webhooks to notify a lightweight native endpoint on your server, pulling code, updating packages, and auto-restarting background processes."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - GitOps
+  - Deployments
+  - Nodejs
+  - GitHub-Actions
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 9
+draft: false
+---
+
+# Windows Home Server — Part 9: PaaS Replacements & GitOps (Heroku/Railway Alternatives)
+
+Platforms like Heroku, Render, and Railway charge monthly fees for hosting dynamic backends. 
+
+We can replace these paid platforms by deploying directly to our Windows home server. We will keep our code stored for free on **GitHub** and build a local **GitOps pipeline**. When you run `git push origin main` on your development machine, GitHub will trigger a secure webhook on our server. The server will pull the latest commits, update packages (`npm install` / `pip install`), and automatically restart the corresponding Windows Service—achieving zero-cost continuous deployment.
+
+---
+
+## 1. The GitOps Webhook Pipeline
+
+Our continuous deployment workflow uses outbound git sync over SSH and secure webhooks:
+
+```
+[Dev PC] ──(Push Code)──> [GitHub Repo]
+                               │
+                       (Webhook POST Event)
+                               │
+                               ▼
+[Local App Service] <── [Deploy Script] <── [deploy-webhook.js:9001]
+```
+
+1. You push code to GitHub.
+2. GitHub sends a POST request to `https://deploy.yourdomain.com` with a cryptographic signature (`X-Hub-Signature-256`) header.
+3. Our local webhook listener verifies the signature using a shared secret.
+4. If valid, it runs a PowerShell script that pulls the code and restarts the application.
+
+---
+
+## 2. Implementing the Webhook Listener (Node.js)
+
+We will write a lightweight, standalone Node.js server that runs as a background service, listening for GitHub events.
+
+### Step 1: Create directories and install packages
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\bin\deployer"
+cd C:\Server\bin\deployer
+npm init -y
+npm install dotenv express body-parser
+```
+
+### Step 2: Write the Deployer Server Code
+Create `C:\Server\bin\deployer\server.js`. This script checks the cryptographic signature using HMAC-SHA256 to ensure only GitHub can trigger deployments:
+
+```javascript
+require('dotenv').config();
+const express = require('express');
+const crypto = require('crypto');
+const { exec } = require('child_process');
+
+const app = express();
+const PORT = 9001;
+const SECRET = process.env.GITHUB_WEBHOOK_SECRET;
+
+app.use(express.json());
+
+// Signature verification middleware
+function verifySignature(req, res, next) {
+    const signature = req.headers['x-hub-signature-256'];
+    if (!signature) {
+        return res.status(401).send('Signature missing');
+    }
+
+    const hmac = crypto.createHmac('sha256', SECRET);
+    const digest = 'sha256=' + hmac.update(JSON.stringify(req.body)).digest('hex');
+    
+    if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+        next();
+    } else {
+        res.status(401).send('Invalid signature');
+    }
+}
+
+app.post('/deploy-bot', verifySignature, (req, res) => {
+    // Only deploy on main branch pushes
+    if (req.body.ref !== 'refs/heads/main') {
+        return res.send('Push was not to main branch. Skipping.');
+    }
+
+    console.log('GitHub webhook received. Starting deployment...');
+    
+    // Execute our PowerShell script to pull code and restart the bot service
+    exec('powershell.exe -ExecutionPolicy Bypass -File C:\\Server\\bin\\deployer\\deploy-bot.ps1', (err, stdout, stderr) => {
+        if (err) {
+            console.error(`Deploy error: ${err.message}`);
+            return res.status(500).send('Deploy failed');
+        }
+        console.log(`Deploy Output:\n${stdout}`);
+        res.send('Deployment successful');
+    });
+});
+
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Deployer listening on port ${PORT}`);
+});
+```
+
+### Step 3: Write the Environment Configuration
+Create `C:\Server\bin\deployer\.env`:
+
+```env
+GITHUB_WEBHOOK_SECRET="generate_another_secure_string_here"
+```
+
+---
+
+## 3. Writing the PowerShell Deployment Script
+
+Create `C:\Server\bin\deployer\deploy-bot.ps1`. This script pulls the latest code from Git, installs dependencies, and restarts the application service:
+
+```powershell
+# Output logs to console for Node.js catcher
+Write-Host "--- Deployment Started at $(Get-Date) ---"
+
+# Step 1: Navigate to app folder
+cd C:\Server\apps\telegram-bot
+
+# Step 2: Fetch and Reset Git repo to main HEAD
+git fetch --all
+git reset --hard origin/main
+
+# Step 3: Install updated npm modules
+npm install --production
+
+# Step 4: Restart the application service natively
+nssm restart TelegramBot
+
+Write-Host "--- Deployment Completed Successfully ---"
+```
+
+---
+
+## 4. Configuring Caddy Routing
+
+Open `C:\Server\caddy\Caddyfile` and add our deployment endpoint subdomain:
+
+```caddy
+deploy.yourdomain.com {
+    reverse_proxy localhost:9001
+}
+```
+
+Restart Caddy:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 5. Wrapping Deployer in NSSM and Registering Webhook
+
+### Step 1: Wrap Deployer Service
+Create the service to start our deployer on boot:
+
+```powershell
+nssm install WebhookDeployer node.exe "C:\Server\bin\deployer\server.js"
+nssm set WebhookDeployer AppDirectory "C:\Server\bin\deployer"
+nssm set WebhookDeployer Start SERVICE_AUTO_START
+nssm start WebhookDeployer
+```
+
+### Step 2: Register the Webhook on GitHub
+1. Log into your GitHub account and go to your **Telegram Bot's Repository** settings.
+2. In the left sidebar, click **Webhooks** → **Add webhook**.
+3. Configure the webhook settings:
+   - **Payload URL**: `https://deploy.yourdomain.com/deploy-bot`
+   - **Content type**: `application/json`
+   - **Secret**: Enter the exact `GITHUB_WEBHOOK_SECRET` string from your `.env` file.
+   - **Which events**: Select **Just the push event**.
+   - **Active**: Checked.
+4. Click **Add webhook**.
+
+GitHub will send a ping test payload. Check the log file `C:\Server\logs\deployer-errors.log` (if any errors occurred) or the webhook status indicator on GitHub. It should display a green checkmark.
+
+Now, whenever you push changes to your bot's repository, your server will securely pull the update and deploy it within seconds, replacing costly cloud PaaS pipelines for free.
+
+---
+
+*In the next part, we will replace paid database tiers (AWS RDS) and object storage (AWS S3).*
+
+**[Proceed to Part 10: Replacing AWS S3 and RDS (Native Databases & Object Storage) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

@@ -1,0 +1,202 @@
+---
+title: "Windows Home Server — Part 10: Replacing AWS S3 and RDS (Native Databases & Object Storage)"
+description: "Set up high-performance native PostgreSQL and MariaDB databases. Integrate backups with MinIO or Cloudflare R2 (10GB/month free tier) to replace paid RDS and S3 options."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Databases
+  - PostgreSQL
+  - Cloudflare-R2
+  - MinIO
+  - Backups
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 10
+draft: false
+---
+
+# Windows Home Server — Part 10: Replacing AWS S3 and RDS (Native Databases & Object Storage)
+
+Hosting databases and object storage on cloud providers represents one of the largest ongoing expenses for developers. AWS RDS (Relational Database Service) and AWS S3 (Simple Storage Service) incur monthly instance and egress fees.
+
+We can eliminate these costs entirely by hosting our databases (**PostgreSQL** and **MariaDB**) natively on our Windows SSD. For object storage, we will set up **MinIO** for local S3-compliant file storage and write an automated script to sync database backups to **Cloudflare R2**—which offers **10GB of free cloud storage** per month with zero egress fees.
+
+---
+
+## 1. Relational Databases Natively on Windows
+
+Instead of using Docker container mounts (which introduce virtualization I/O overhead), we will run native Windows database instances.
+
+### 1.1 PostgreSQL Setup & Memory Tuning
+Download and run the official PostgreSQL installer:
+
+```powershell
+# Download EnterpriseDB PostgreSQL Installer
+Invoke-WebRequest -Uri "https://sbp.enterprisedb.com/getinstaller.php?fn=postgresql-16.2-1-windows-x64.exe" -OutFile "C:\Server\bin\postgres_installer.exe"
+
+# Launch installer
+Start-Process -FilePath "C:\Server\bin\postgres_installer.exe" -Wait
+```
+
+*During setup:*
+1. Select the installation directory (`C:\Program Files\PostgreSQL\16`).
+2. Set a secure database master password.
+3. Keep the default port (`5432`) and click finish.
+
+#### Optimizing PostgreSQL for 16GB RAM
+By default, PostgreSQL is configured conservatively. To prevent it from starving other applications on our home server while maximizing read/write performance, modify the configuration file `C:\Program Files\PostgreSQL\16\data\postgresql.conf`:
+
+```ini
+# Memory Allocation Tuning
+shared_buffers = 4GB             # 25% of total system RAM
+work_mem = 64MB                  # Memory allocated per query sort operation
+maintenance_work_mem = 512MB     # Memory allocated for INDEX builds/VACUUM
+effective_cache_size = 8GB       # Estimated disk cache space available
+
+# Log Rotation Tuning
+logging_collector = on
+log_directory = 'C:/Server/logs/postgres'
+log_filename = 'postgresql-%Y-%m-%d.log'
+log_rotation_size = 10MB
+```
+
+Restart the service to apply changes:
+
+```powershell
+Restart-Service "postgresql-x64-16"
+```
+
+---
+
+### 1.2 MariaDB Setup (Lightweight MySQL Alternative)
+Install MariaDB natively:
+
+```powershell
+# Install MariaDB via winget
+winget install --id MariaDB.MariaDB -e --accept-source-agreements --accept-package-agreements
+```
+
+Enable and start the service:
+
+```powershell
+Start-Service "MariaDB"
+Set-Service -Name "MariaDB" -StartupType Automatic
+```
+
+---
+
+## 2. Local S3 Object Storage: MinIO
+
+MinIO is a high-performance, S3-compatible object storage server written in Go. Running it natively on Windows gives you a local target for assets, media uploads, and database dumps.
+
+### Step 1: Download MinIO
+Download the executables:
+
+```powershell
+# Create storage directories
+New-Item -ItemType Directory -Force -Path "C:\Server\minio"
+New-Item -ItemType Directory -Force -Path "D:\server-data\minio-buckets"
+
+# Download binary
+Invoke-WebRequest -Uri "https://dl.min.io/server/minio/release/windows-amd64/minio.exe" -OutFile "C:\Server\bin\minio.exe"
+```
+
+### Step 2: Wrap MinIO in NSSM
+Create a startup script `C:\Server\minio\start-minio.ps1`:
+
+```powershell
+# Credentials
+$env:MINIO_ROOT_USER = "adminUsername"
+$env:MINIO_ROOT_PASSWORD = "adminPassword12345"
+
+# Start MinIO server pointing to the HDD data directory
+C:\Server\bin\minio.exe server D:\server-data\minio-buckets --console-address ":9002" --address ":9000"
+```
+
+Install the service:
+
+```powershell
+nssm install MinIO powershell.exe "-ExecutionPolicy Bypass -File C:\Server\minio\start-minio.ps1"
+nssm start MinIO
+```
+
+You can access the local console at `http://localhost:9002` to manage buckets.
+
+---
+
+## 3. Offsite Backup Automation (Cloudflare R2 Free Tier)
+
+While local backups are good, a drive failure or physical event can destroy data. We will use **Cloudflare R2** to store offsite encrypted copies of our databases. Cloudflare R2's free tier provides 10GB of storage with no egress bandwidth fees—ideal for backups.
+
+### Step 1: Install AWS CLI on Windows
+AWS CLI can communicate with any S3-compatible service, including Cloudflare R2.
+
+```powershell
+winget install --id Amazon.AWSCLI -e --accept-source-agreements --accept-package-agreements
+```
+
+### Step 2: Configure Cloudflare R2 Credentials
+1. Log into your Cloudflare Dashboard.
+2. Go to **R2 Object Storage** → **Manage R2 API Tokens**.
+3. Create an API token with **Edit** access.
+4. Note your **Access Key ID**, **Secret Access Key**, and **Endpoint URL** (e.g. `https://ACCOUNT_ID.r2.cloudflarestorage.com`).
+
+Configure the AWS CLI locally:
+
+```powershell
+# Set credentials manually or via environment variables
+aws configure set aws_access_key_id "YOUR_R2_ACCESS_KEY_ID"
+aws configure set aws_secret_access_key "YOUR_R2_SECRET_ACCESS_KEY"
+```
+
+### Step 3: Write the Backup Script
+Create `C:\Server\bin\backup-databases.ps1`. This script dumps your databases, zips them, and uploads them to your R2 bucket:
+
+```powershell
+# Configurations
+$BackupsDir = "C:\Server\data\backups"
+$Date = Get-Date -Format "yyyy-MM-dd"
+$PGBackupFile = "$BackupsDir\postgres-dump-$Date.sql"
+$MariaBackupFile = "$BackupsDir\mariadb-dump-$Date.sql"
+$ZipFile = "$BackupsDir\databases-$Date.zip"
+
+$R2Bucket = "my-backup-bucket"
+$R2Endpoint = "https://YOUR_CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
+
+# Create backup dir
+New-Item -ItemType Directory -Force -Path $BackupsDir | Out-Null
+
+# 1. Run database dumps
+# postgres pg_dump (set PGUSER/PGPASSWORD environment variables to bypass password checks)
+$env:PGPASSWORD = "postgresMasterPassword"
+& "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe" -U postgres -h localhost -F c -b -v -f $PGBackupFile postgres
+
+# mariadb mysqldump
+$env:MYSQL_PWD = "mariadbPassword"
+& "C:\Program Files\MariaDB 11.2\bin\mariadb-dump.exe" -u root --all-databases --result-file=$MariaBackupFile
+
+# 2. Compress dumps
+Compress-Archive -Path $PGBackupFile, $MariaBackupFile -DestinationPath $ZipFile -Force
+
+# 3. Upload to Cloudflare R2
+aws s3 cp $ZipFile "s3://$R2Bucket/database-backups/" --endpoint-url $R2Endpoint --no-sign-request:$false
+
+# 4. Clean up raw files and old backups (older than 7 days)
+Remove-Item $PGBackupFile -Force
+Remove-Item $MariaBackupFile -Force
+
+Get-ChildItem -Path $BackupsDir -Filter "*.zip" | Where-Object { $_.CreationTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Force
+```
+
+### Step 4: Schedule the Script
+Create a daily scheduled task via Task Scheduler (`taskschd.msc`) to run `powershell.exe -ExecutionPolicy Bypass -File C:\Server\bin\backup-databases.ps1` at `03:00 AM` every day.
+
+By implementing this, you get enterprise-grade PostgreSQL performance on your local SSD and daily automated offsite backups on Cloudflare R2—all without paying a single rupee in subscription fees.
+
+---
+
+*In the next part, we will replace paid identity providers (Auth0) and user analytics (Google Analytics).*
+
+**[Proceed to Part 11: Replacing Auth0 and Google Analytics (Identity Management & Privacy Analytics) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

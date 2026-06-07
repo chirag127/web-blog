@@ -1,0 +1,172 @@
+---
+title: "Windows Home Server — Part 21: Replacing Sentry & Error Tracking (Self-Hosted Logging)"
+description: "Bypass Sentry's paid tier limits. Set up native file logging, console redirection, and custom PowerShell scripts to catch runtime exceptions."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Sentry
+  - Error-Tracking
+  - PowerShell
+  - Logging
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 21
+draft: false
+---
+
+# Windows Home Server — Part 21: Replacing Sentry & Error Tracking (Self-Hosted Logging)
+
+Application error monitoring tools like Sentry or LogRocket are helpful during development, but their free tiers limit error transactions. Once you run production apps with regular traffic, paid subscriptions quickly become expensive.
+
+We can build a local error-tracking pipeline natively on Windows. We will implement **structured JSON logging** in our applications, write logs directly to the disk, and create a **PowerShell watcher script** that scans these log files for runtime crashes and pushes formatted debug stack traces to your **Telegram bot**.
+
+---
+
+## 1. Structured JSON Logging
+
+To scan logs programmatically, our applications must write logs in a structured format (JSON) instead of plain text.
+
+Here is an example in a Node.js Express application using the **winston** logging library:
+
+```javascript
+const winston = require('winston');
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    // Write all errors to a dedicated error log
+    new winston.transports.File({ 
+      filename: 'C:\\Server\\logs\\apps\\dashboard-error.log', 
+      level: 'error' 
+    }),
+    // Write all logs to a combined file
+    new winston.transports.File({ 
+      filename: 'C:\\Server\\logs\\apps\\dashboard-combined.log' 
+    })
+  ]
+});
+
+// Example route catching errors
+app.get('/error-test', (req, res, next) => {
+  try {
+      throw new Error("Failed to process payment database transaction.");
+  } catch (err) {
+      logger.error({
+          message: err.message,
+          stack: err.stack,
+          timestamp: new Date().toISOString()
+      });
+      res.status(500).send("Internal Server Error");
+  }
+});
+```
+
+---
+
+## 2. Implementing the PowerShell Error Watcher
+
+We will write a PowerShell script that parses new entries in our application error logs, isolates crash stacks, and forwards them to Telegram. To avoid duplicate notifications, the script stores the file size of the last scan.
+
+Create `C:\Server\bin\watch-errors.ps1`:
+
+```powershell
+# Configurations
+$LogDir = "C:\Server\logs\apps"
+$TrackerFile = "C:\Server\data\error_watcher_positions.json"
+$TelegramToken = "YOUR_TELEGRAM_BOT_TOKEN"
+$TelegramChatId = "YOUR_TELEGRAM_CHAT_ID"
+
+function Send-TelegramAlert ($msg) {
+    $body = @{
+        chat_id = $TelegramChatId
+        text = "🚨 App Exception Detected:`n$msg"
+    } | ConvertTo-Json
+    $uri = "https://api.telegram.org/bot$TelegramToken/sendMessage"
+    Invoke-RestMethod -Uri $uri -Method Post -Body $body -ContentType "application/json" | Out-Null
+}
+
+# Load last positions
+$Positions = @{}
+if (Test-Path $TrackerFile) {
+    $Positions = ConvertFrom-Json (Get-Content $TrackerFile -Raw) -AsHashtable
+}
+
+$LogFiles = Get-ChildItem -Path $LogDir -Filter "*-error.log"
+
+foreach ($file in $LogFiles) {
+    $filePath = $file.FullName
+    $lastPosition = 0
+    if ($Positions.ContainsKey($filePath)) {
+        $lastPosition = [int64]$Positions[$filePath]
+    }
+    
+    $currentSize = $file.Length
+    if ($currentSize -le $lastPosition) {
+        # No new logs written
+        continue
+    }
+    
+    # Read only new lines written since last check
+    $stream = New-Object System.IO.FileStream($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    $stream.Seek($lastPosition, [System.IO.SeekOrigin]::Begin) | Out-Null
+    $reader = New-Object System.IO.StreamReader($stream)
+    
+    while ($line = $reader.ReadLine()) {
+        if ([string]::IsNullOrEmpty($line)) { continue }
+        
+        try {
+            # Parse the JSON log
+            $logObj = ConvertFrom-Json $line -ErrorAction SilentlyContinue
+            if ($null -ne $logObj) {
+                $alertMsg = "App: $($file.Name)`nMsg: $($logObj.message)`nStack: $($logObj.stack.Substring(0, [math]::Min($logObj.stack.Length, 200)))"
+                Send-TelegramAlert $alertMsg
+            }
+        } catch {
+            # If log isn't JSON, send raw line
+            Send-TelegramAlert "App: $($file.Name)`nRaw: $line"
+        }
+    }
+    
+    $reader.Close()
+    $stream.Close()
+    
+    # Save current position
+    $Positions[$filePath] = $currentSize
+}
+
+# Save positions to disk
+$Positions | ConvertTo-Json | Out-File $TrackerFile -Encoding utf8 -Force
+```
+
+---
+
+## 3. Scheduling the Watcher
+
+Schedule the script to run every **5 minutes** using Windows Task Scheduler:
+
+```powershell
+$Action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Server\bin\watch-errors.ps1"
+
+$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+
+$Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+Register-ScheduledTask `
+    -TaskName "Server-Error-Watcher" `
+    -Action $Action `
+    -Trigger $Trigger `
+    -Principal $Principal
+```
+
+Using this structured logging pattern and a PowerShell log watcher, you establish a real-time error reporting loop for all your hosted services, replacing costly third-party crash telemetry subscriptions for free.
+
+---
+
+*In the next part, we will replace paid status page widgets like Statuspage.io.*
+
+**[Proceed to Part 22: Replacing Statuspage.io & Status Pages (Uptime Kuma Status) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

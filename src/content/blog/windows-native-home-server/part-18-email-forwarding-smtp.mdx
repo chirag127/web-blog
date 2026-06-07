@@ -1,0 +1,136 @@
+---
+title: "Windows Home Server — Part 18: Replacing Paid Email Forwarding & SMTP (SendGrid, Mailgun)"
+description: "Utilize Cloudflare Email Routing for free inbound forwarding and set up Mailrise as an SMTP-to-app gateway to forward alerts as push notifications."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Email-Routing
+  - Cloudflare
+  - Mailrise
+  - SMTP
+  - Notifications
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 18
+draft: false
+---
+
+# Windows Home Server — Part 18: Replacing Paid Email Forwarding & SMTP (SendGrid, Mailgun)
+
+Managed email forwarding services (like ImprovMX) and transactional SMTP providers (like SendGrid or Mailgun) limit free tiers, charge monthly subscription fees, or block forwarding options.
+
+We can solve this using a hybrid model: we will route all incoming custom domain emails using **Cloudflare Email Routing (100% Free)** to your personal inbox (Gmail or Outlook), and install **Mailrise** natively on our server to handle outbound transactional alerts—converting standard application SMTP emails into instant smartphone push notifications.
+
+---
+
+## 1. Inbound Routing: Cloudflare Email Routing
+
+Cloudflare offers free inbound email forwarding for any domain managed under their DNS:
+
+```
+[Sender] ──> hi@yourdomain.com ──> [Cloudflare Email Router] ──> personal@gmail.com
+```
+
+### Setup Steps:
+1. Log into your **Cloudflare Dashboard** and select your domain.
+2. In the left sidebar, click **Email** → **Email Routing**.
+3. Click **Get Started** / **Enable Email Routing**.
+4. Cloudflare will request to auto-configure your DNS. Click **Add records automatically** to add the correct `MX` and `TXT` records (SPF configuration).
+5. In the **Routing rules** tab, click **Create rule**:
+   - **Custom address**: `hi` (or `support` / `admin`).
+   - **Action**: **Forward to**.
+   - **Destination address**: Enter your personal email (e.g. `yourname@gmail.com`).
+6. Verify the destination email by clicking the confirmation link sent to your inbox.
+
+All incoming emails to `hi@yourdomain.com` will now forward to your personal account for free.
+
+---
+
+## 2. Outbound Transactional Alerts: Mailrise
+
+Many applications (like firewalls, printers, or legacy software) only support **SMTP email alerts** when notifying you of events. Paying for SendGrid to route these transactional alerts to yourself is expensive.
+
+**Mailrise** is a lightweight Python-based SMTP server. Instead of sending emails across the web, Mailrise runs locally, intercepts the SMTP emails, and converts them into instant push notifications on your phone (using Discord, Telegram, Pushover, or Slack).
+
+```
+[Legacy App / Backup Task]
+            │
+      (SMTP Port 25)
+            │
+            ▼
+    [Mailrise Server] ──(Apprise API)──> [Telegram / Discord Push Alert]
+```
+
+### Step 1: Install Mailrise Natively
+Mailrise is built on Python. Open PowerShell and run:
+
+```powershell
+# Setup virtual environment
+python -m venv C:\Server\mailrise-venv
+C:\Server\mailrise-venv\Scripts\Activate.ps1
+
+# Install mailrise and apprise
+pip install mailrise apprise
+```
+
+### Step 2: Configure Mailrise
+Create `C:\Server\mailrise-venv\mailrise.conf`. This configuration maps email usernames to notification endpoints:
+
+```yaml
+# Mailrise Configuration File
+configs:
+  # Any email sent to 'telegram@mailrise.xyz' will route to your Telegram bot
+  telegram:
+    - urls:
+        - tgram://YOUR_TELEGRAM_BOT_TOKEN/YOUR_TELEGRAM_CHAT_ID
+
+  # Any email sent to 'discord@mailrise.xyz' will route to a Discord webhook
+  discord:
+    - urls:
+        - discord://webhook_id/webhook_token
+```
+
+### Step 3: Wrap Mailrise in NSSM
+Create the service:
+
+```powershell
+nssm install Mailrise powershell.exe "-ExecutionPolicy Bypass -File C:\Server\mailrise-venv\start-mailrise.ps1"
+```
+
+Create the launch script `C:\Server\mailrise-venv\start-mailrise.ps1`:
+
+```powershell
+cd C:\Server\mailrise-venv
+.\Scripts\mailrise.exe -c mailrise.conf -p 8025
+```
+
+Start the service:
+
+```powershell
+nssm start Mailrise
+```
+
+Mailrise now runs in the background, listening for local SMTP connections on port `8025`.
+
+### Step 4: Test the SMTP Alert Gateway
+To test if the SMTP pipeline works, you can send an email via PowerShell:
+
+```powershell
+Send-MailMessage `
+    -From "alert@homeserver.local" `
+    -To "telegram@mailrise.xyz" `
+    -Subject "Backup Succeeded" `
+    -Body "Weekly files backup has completed successfully." `
+    -SmtpServer "localhost" `
+    -Port 8025
+```
+
+The email will be intercepted by Mailrise, translated into a push notification, and delivered directly to your Telegram bot—giving you a free alert pipeline for any application.
+
+---
+
+*In the next part, we will replace paid RSS and Read-it-Later services.*
+
+**[Proceed to Part 19: Replacing Paid Read-it-Later & RSS Services (Pocket, Feedly Premium) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

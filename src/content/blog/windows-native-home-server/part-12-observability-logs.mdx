@@ -1,0 +1,207 @@
+---
+title: "Windows Home Server — Part 12: Replacing Datadog & CloudWatch (Bare-Metal Observability)"
+description: "Gather system and container performance metrics using Prometheus, Windows Exporter, Loki, and Grafana for real-time visualization and alerting."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Observability
+  - Prometheus
+  - Grafana
+  - Loki
+  - Promtail
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 12
+draft: false
+---
+
+# Windows Home Server — Part 12: Replacing Datadog & CloudWatch (Bare-Metal Observability)
+
+Renting cloud observability infrastructure (like Datadog, New Relic, or AWS CloudWatch) introduces significant licensing and custom metric ingestion costs.
+
+We can run an enterprise-grade observability stack natively on Windows for free. We will install **Prometheus** alongside **Windows Exporter** to collect hardware metrics (CPU, RAM, disk read/write times, and network bandwidth). We will then install **Grafana** to visualize these metrics, and set up **Loki** with **Promtail** to aggregate application logs from our `C:\Server\logs\` folder—all running natively in the background.
+
+---
+
+## 1. Metric Collection: Prometheus & Windows Exporter
+
+Windows Exporter (formerly WMI Exporter) runs as a background service on Windows, collecting operating system metrics and exposing them on port `9182` for Prometheus to read.
+
+### Step 1: Install Windows Exporter
+Download and install it via winget:
+
+```powershell
+winget install --id Prometheus.WindowsExporter -e --accept-source-agreements --accept-package-agreements
+```
+
+This automatically registers and starts a Windows Service named `windows_exporter` listening on `http://localhost:9182/metrics`.
+
+### Step 2: Install Prometheus
+Download and extract Prometheus for Windows:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\prometheus"
+Invoke-WebRequest -Uri "https://github.com/prometheus/prometheus/releases/download/v2.50.0/prometheus-2.50.0.windows-amd64.zip" -OutFile "C:\Server\prometheus\prometheus.zip"
+Expand-Archive -Path "C:\Server\prometheus\prometheus.zip" -DestinationPath "C:\Server\prometheus" -Force
+
+# Clean up paths
+Move-Item "C:\Server\prometheus\prometheus-2.50.0.windows-amd64\prometheus.exe" -Destination "C:\Server\bin\prometheus.exe" -Force
+Move-Item "C:\Server\prometheus\prometheus-2.50.0.windows-amd64\promtool.exe" -Destination "C:\Server\bin\promtool.exe" -Force
+Remove-Item "C:\Server\prometheus\prometheus-2.50.0.windows-amd64" -Recurve -Force
+Remove-Item "C:\Server\prometheus\prometheus.zip" -Force
+```
+
+### Step 3: Configure Prometheus Scrape Targets
+Create `C:\Server\prometheus\prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Host metrics (Windows Exporter)
+  - job_name: "windows-host"
+    static_configs:
+      - targets: ["localhost:9182"]
+
+  # Uptime Kuma metrics
+  - job_name: "uptime-kuma"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["localhost:3001"]
+```
+
+### Step 4: Wrap Prometheus in NSSM
+Create the service:
+
+```powershell
+nssm install Prometheus C:\Server\bin\prometheus.exe "--config.file C:\Server\prometheus\prometheus.yml --storage.tsdb.path C:\Server\data\prometheus_data"
+nssm set Prometheus AppDirectory "C:\Server\prometheus"
+nssm start Prometheus
+```
+
+---
+
+## 2. Visualization Tier: Grafana
+
+Grafana connects to Prometheus and presents metrics in clean dashboards.
+
+### Step 1: Install Grafana
+Download and run the installer:
+
+```powershell
+# Install Grafana via winget
+winget install --id GrafanaLabs.Grafana -e --accept-source-agreements --accept-package-agreements
+```
+
+This installs Grafana as a system service automatically. Open your browser and navigate to `http://localhost:3000` (default credentials: `admin` / `admin`), and click **Add your first data source** → select **Prometheus** → set URL to `http://localhost:9090` → click **Save & test**.
+
+---
+
+## 3. Log Aggregation: Loki & Promtail
+
+Instead of parsing files locally, we will use **Loki** to index logs, and **Promtail** to parse them and forward them to Loki.
+
+### Step 1: Download Loki and Promtail
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\loki"
+New-Item -ItemType Directory -Force -Path "C:\Server\promtail"
+
+# Download Loki
+Invoke-WebRequest -Uri "https://github.com/grafana/loki/releases/download/v2.9.4/loki-windows-amd64.exe.zip" -OutFile "C:\Server\loki\loki.zip"
+Expand-Archive -Path "C:\Server\loki\loki.zip" -DestinationPath "C:\Server\loki" -Force
+Move-Item "C:\Server\loki\loki-windows-amd64.exe" -Destination "C:\Server\bin\loki.exe" -Force
+Remove-Item "C:\Server\loki\loki.zip" -Force
+
+# Download Promtail
+Invoke-WebRequest -Uri "https://github.com/grafana/loki/releases/download/v2.9.4/promtail-windows-amd64.exe.zip" -OutFile "C:\Server\promtail\promtail.zip"
+Expand-Archive -Path "C:\Server\promtail\promtail.zip" -DestinationPath "C:\Server\promtail" -Force
+Move-Item "C:\Server\promtail\promtail-windows-amd64.exe" -Destination "C:\Server\bin\promtail.exe" -Force
+Remove-Item "C:\Server\promtail\promtail.zip" -Force
+```
+
+### Step 2: Configure Loki
+Create `C:\Server\loki\loki-config.yml`:
+
+```yaml
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: C:\Server\data\loki_data
+  storage:
+    filesystem:
+      chunks_directory: C:\Server\data\loki_data\chunks
+      rules_directory: C:\Server\data\loki_data\rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+```
+
+### Step 3: Configure Promtail to Tail Logs
+Create `C:\Server\promtail\promtail-config.yml`. This script instructs Promtail to tail log files in `C:\Server\logs\` and send them to Loki:
+
+```yaml
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: C:\Server\data\promtail_positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: server-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: app-logs
+          __path__: C:\Server\logs\*.log
+```
+
+### Step 4: Wrap Loki and Promtail in NSSM
+Create the services:
+
+```powershell
+# Wrap Loki
+nssm install Loki C:\Server\bin\loki.exe "-config.file C:\Server\loki\loki-config.yml"
+nssm set Loki AppDirectory "C:\Server\loki"
+nssm start Loki
+
+# Wrap Promtail
+nssm install Promtail C:\Server\bin\promtail.exe "-config.file C:\Server\promtail\promtail-config.yml"
+nssm set Promtail AppDirectory "C:\Server\promtail"
+nssm start Promtail
+```
+
+### Step 5: Add Loki Data Source in Grafana
+1. Go to Grafana → **Data Sources** → **Add new data source** → select **Loki**.
+2. Set URL to `http://localhost:3100` and click **Save & test**.
+3. Go to the **Explore** tab in Grafana, select Loki, and run the query `{job="app-logs"}`. You will see a live log stream from all Caddy, Node, Python, and DB logs—eliminating Datadog and CloudWatch fees.
+
+---
+
+*In the next part, we will secure client access and create private overlay networks for free using Tailscale.*
+
+**[Proceed to Part 13: Replacing Paid VPNs & Team Access (Private WireGuard & Tailscale) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

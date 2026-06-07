@@ -1,0 +1,168 @@
+---
+title: "Part 9: Coding the Multi-Strategy Automation Bot"
+description: "A complete step-by-step blueprint of a parameterized Python option trading bot running on Shoonya/Flattrade SDK."
+pubDate: 2026-06-07
+tags:
+  - Python
+  - API
+  - Shoonya
+  - Flattrade
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 9
+draft: false
+---
+
+# Part 9: Coding the Multi-Strategy Automation Bot
+
+Now, let's write the core Python trading script that executes our options strategies.
+We will structure this bot to be **parameterized**, allowing us to run **Vertical Spreads,
+Iron Condors, or Iron Butterflies** simply by changing our configuration parameters.
+
+We will use the **Shoonya (Finvasia)** or **Flattrade** API SDK. Both offer free
+API access.
+
+---
+
+## 1. Authentication and Option Chain Processing
+
+Options trading APIs require a daily token generation using your username, password,
+API key, and a TOTP (Time-based One-Time Password) code generated from your 2FA
+secret key.
+
+Here is the initialization script (`src/bot.py`):
+
+```python
+import os
+import time
+import pyotp
+import pandas as pd
+from NorenRestApiPy.NorenApi import NorenApi
+
+class TradingBot(NorenApi):
+    def __init__(self):
+        NorenApi.__init__(self)
+        
+    def login_to_broker(self):
+        user = os.getenv("BROKER_USER_ID")
+        password = os.getenv("BROKER_PASSWORD")
+        api_key = os.getenv("BROKER_API_KEY")
+        totp_key = os.getenv("BROKER_TOTP_KEY")
+        
+        # Generate TOTP dynamically
+        totp = pyotp.TOTP(totp_key).now()
+        
+        response = self.login(
+            userid=user, 
+            password=password, 
+            twoFA=totp, 
+            private_key=api_key, 
+            vendor_code=os.getenv("VENDOR_CODE"), 
+            imei="mac_address"
+        )
+        return response
+
+bot = TradingBot()
+bot.login_to_broker()
+```
+
+---
+
+## 2. Parameterized Strike Selection
+
+To execute strategies programmatically, we must parse the live option chain.
+We fetch the Spot index price, calculate strike levels, and filter options based
+on their Delta value.
+
+Here is how we query the option chain and select strikes:
+
+```python
+def select_strategy_strikes(bot, underlying="NSE:NIFTY50", strategy="IRON_CONDOR"):
+    # Get spot price
+    quote = bot.get_quotes(exchange="NSE", token="26000") # Nifty 50 token
+    spot_price = float(quote["lp"])
+    
+    # Calculate ATM Strike (rounded to nearest 50 points)
+    atm_strike = round(spot_price / 50) * 50
+    
+    # Fetch Option Chain
+    chain = bot.get_option_chain(
+        exchange="NFO", 
+        tradingsymbol="NIFTY", 
+        strikeprice=atm_strike, 
+        count=15 # Get 15 strikes above and below
+    )
+    
+    df = pd.DataFrame(chain["options"])
+    
+    if strategy == "IRON_CONDOR":
+        # Strategy: Sell OTM strikes (e.g. Spot +- 300), Buy further OTM (Spot +- 400)
+        short_ce = df[df["strike"] == atm_strike + 300].iloc[0]
+        long_ce = df[df["strike"] == atm_strike + 400].iloc[0]
+        short_pe = df[df["strike"] == atm_strike - 300].iloc[0]
+        long_pe = df[df["strike"] == atm_strike - 400].iloc[0]
+        
+        return {
+            "sell_legs": [short_ce, short_pe],
+            "buy_legs": [long_ce, long_pe]
+        }
+        
+    elif strategy == "IRON_BUTTERFLY":
+        # Strategy: Sell ATM CE/PE, Buy OTM CE/PE protection (Spot +- 150)
+        short_ce = df[df["strike"] == atm_strike].iloc[0]
+        short_pe = df[df["strike"] == atm_strike].iloc[0]
+        long_ce = df[df["strike"] == atm_strike + 150].iloc[0]
+        long_pe = df[df["strike"] == atm_strike - 150].iloc[0]
+        
+        return {
+            "sell_legs": [short_ce, short_pe],
+            "buy_legs": [long_ce, long_pe]
+        }
+```
+
+---
+
+## 3. Placing Multi-Leg Orders
+
+To minimize execution delay, we must place our buying protection legs **before**
+our selling credit legs. Placing buying legs first:
+1.  **Reduces Margin Requirements:** Exchanges credit your margin benefit immediately.
+    If you place short legs first, you need ₹1.5 Lakhs per leg. If you place long
+    legs first, the margin drops to ~₹50,000 for the entire basket.
+2.  **Prevents Margin Rejections:** Avoids order failures due to insufficient balance.
+
+```python
+def place_basket_order(bot, legs):
+    # 1. Place BUY orders first for margin benefit
+    for leg in legs["buy_legs"]:
+        bot.place_order(
+            buy_or_sell="B",
+            product_type="M", # Margin order
+            exchange="NFO",
+            tradingsymbol=leg["tradingsymbol"],
+            quantity=50, # 1 Lot Nifty
+            price_type="LMT", # Limit order to avoid slippage
+            price=float(leg["ask_price"])
+        )
+        
+    # Wait 500ms to ensure fills
+    time.sleep(0.5)
+    
+    # 2. Place SELL orders
+    for leg in legs["sell_legs"]:
+        bot.place_order(
+            buy_or_sell="S",
+            product_type="M",
+            exchange="NFO",
+            tradingsymbol=leg["tradingsymbol"],
+            quantity=50,
+            price_type="LMT",
+            price=float(leg["bid_price"])
+        )
+```
+
+In the next part, we will look at how to implement risk management and adjustments to
+defend our positions if the market moves against us.
+
+**[Proceed to Part 10: Algorithmic Risk Management & Position Adjustments →](/blog/wealth-and-options-automation/part-10-risk-management-adjustments)**

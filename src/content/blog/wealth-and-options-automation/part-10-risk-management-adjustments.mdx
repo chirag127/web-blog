@@ -1,0 +1,105 @@
+---
+title: "Part 10: Algorithmic Risk Management & Position Adjustments"
+description: "How to program dynamic risk management: portfolio stop-losses, leg rolling, and Iron Condor to Iron Fly conversions."
+pubDate: 2026-06-07
+tags:
+  - Risk Management
+  - Option Trading
+  - Algo Trading
+  - Adjustments
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 10
+draft: false
+---
+
+# Part 10: Algorithmic Risk Management & Position Adjustments
+
+In systematic option trading, entry is only 20% of the game. The remaining 80% is
+**risk management** and **adjustments**. When you sell options, the market will
+eventually test your short strikes. A disciplined, automated exit or adjustment
+protocol is what separates professional systems from retail blowups.
+
+Let's look at how to implement dynamic risk controls in Python.
+
+---
+
+## 1. Portfolio-Level Stop Loss
+
+A portfolio-level stop-loss is your absolute fail-safe. If the market experiences
+a gap up or down, and the aggregate loss across all open legs exceeds a predefined
+limit (e.g., 1.5% of your capital, or ₹2,000 for a ₹1.5L account), the bot must
+exit all legs immediately.
+
+Here is the Python logic:
+
+```python
+def monitor_portfolio_risk(bot, active_positions, daily_max_loss=2000):
+    total_unrealized_pnl = 0
+    
+    for pos in active_positions:
+        quote = bot.get_quotes(exchange="NFO", token=pos["token"])
+        ltp = float(quote["lp"])
+        
+        # Calculate PnL (Option selling)
+        leg_pnl = (pos["entry_price"] - ltp) * pos["quantity"]
+        total_unrealized_pnl += leg_pnl
+        
+    if total_unrealized_pnl <= -daily_max_loss:
+        print(f"Portfolio Stop-Loss Triggered: -₹{abs(total_unrealized_pnl)}")
+        exit_all_positions(bot, active_positions)
+        send_telegram_alert(f"🚨 *Portfolio Stop-Loss Triggered!*\nTotal Loss: `-₹{abs(total_unrealized_pnl)}`")
+```
+
+---
+
+## 2. Dynamic Adjustments: Rolling the Untested Side
+
+If the market trends in one direction, one side of your Iron Condor will gain value
+(challenged side) while the other side loses value (untested side). To balance
+our delta and collect additional premium to offset losses:
+*   If Nifty rises: The Put spread loses value. We buy back the short Put spread
+    for a cheap price (e.g., ₹2) and sell a new, higher Put spread closer to the
+    current spot price.
+*   This collects more premium and moves our overall break-even point higher on the
+    upside.
+
+```python
+def roll_untested_side(bot, active_positions, index_spot_price):
+    # If Spot moves closer to our Short Call strike:
+    # 1. Buy back active Put Spread (untested side)
+    # 2. Sell a higher Put Spread to collect more premium
+    
+    untested_put_legs = [pos for pos in active_positions if pos["option_type"] == "PE"]
+    
+    # Exit old PE legs
+    for leg in untested_put_legs:
+        bot.place_order(buy_or_sell="B", product_type="M", exchange="NFO", ...)
+        
+    # Calculate new PE strikes (closer to spot)
+    new_short_pe_strike = round(index_spot_price / 50) * 50 - 150
+    new_long_pe_strike = new_short_pe_strike - 100
+    
+    # Enter new PE spread...
+    print(f"Rolled Put spread higher to strike {new_short_pe_strike}")
+```
+
+---
+
+## 3. Converting Iron Condors to Iron Flies
+
+Under heavy market trends where rolling the untested side is insufficient, you can
+convert your Iron Condor into an **Iron Butterfly (Iron Fly)**:
+*   Move the short Put strike up until it matches the short Call strike (converting
+    the range into a single peak).
+*   This maximizes the net credit received and decreases the maximum potential loss on
+    the challenged side, though it narrows your overall profit range.
+
+By coding these rules into your script, your bot can execute defensive adjustments
+during the day without requiring you to look at your screens during office hours.
+
+In the next part, we will look at how to build active income streams using your
+coding skills to fund your trading accounts.
+
+**[Proceed to Part 11: Active Income Accelerator: Monetizing Developer Skills →](/blog/wealth-and-options-automation/part-11-active-income-freelance-saas)**

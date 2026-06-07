@@ -1,0 +1,103 @@
+---
+title: "Windows Home Server — Part 14: Replacing Google Photos & iCloud (Self-Hosted Photo Storage)"
+description: "Configure a photo library sync (Lychee or OCIS Photos) to backup mobile media directly to the server's 1TB HDD, bypassing monthly cloud storage fees."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - OwnCloud-OCIS
+  - FileBrowser
+  - Google-Photos
+  - iCloud
+  - Storage
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 14
+draft: false
+---
+
+# Windows Home Server — Part 14: Replacing Google Photos & iCloud (Self-Hosted Photo Storage)
+
+Paid subscription services like Google One and Apple iCloud charge recurring monthly fees to back up your smartphone's camera roll. Once you exceed their small free tiers (15GB and 5GB respectively), you are forced to pay.
+
+Our home server laptop is equipped with a large **1 TB SATA HDD**—which costs ₹0/month to run. We will leverage this drive to build a private, automated cloud backup system. Using our existing **OwnCloud Infinite Scale (OCIS)** instance from Part 3, we will configure automated background camera uploads from iOS and Android devices, keeping our pictures organized on our local drive.
+
+---
+
+## 1. Directory Setup on the HDD
+
+We want to keep all raw photo and video files on the large HDD to preserve our SSD's storage capacity.
+
+Create a dedicated photos folder:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "D:\server-data\media\photos"
+```
+
+---
+
+## 2. Setting Up Automated Mobile Sync
+
+The official ownCloud mobile app includes a built-in background sync tool that automatically detects new photos and uploads them to the server.
+
+### Step 1: Install the ownCloud App
+1. Search for and download the free **ownCloud** application on the iOS App Store or Google Play Store.
+2. Open the app and connect to your server using your domain: `https://cloud.yourdomain.com`.
+3. Log in with your admin credentials (or create a dedicated user in the OCIS Web UI).
+
+### Step 2: Configure Camera Uploads
+1. Go to the app's **Settings** menu.
+2. Select **Camera Upload** (or **Instant Upload**).
+3. Toggle the upload feature on.
+4. Set the target folder inside your ownCloud storage (e.g. `/Photos/MobileSync`).
+5. Configure the sync settings:
+   - **Upload on Wi-Fi only**: Checked (recommended to save mobile data).
+   - **Upload in background**: Checked.
+   - **Upload videos**: Checked.
+
+When you take new photos, the app will upload them to the server in the background.
+
+---
+
+## 3. Web Gallery Interface (FileBrowser & Lychee)
+
+While ownCloud stores the files and handles sync, you want a fast, responsive gallery interface to browse your library.
+
+### 3.1 Utilizing FileBrowser's Built-In Gallery
+Our native **FileBrowser** installation from Part 3 includes built-in photo gallery features out of the box:
+
+1. Open `https://status.yourdomain.com` (or the URL you assigned to FileBrowser, e.g., `https://files.yourdomain.com`).
+2. Navigate to your photos folder.
+3. Click the **Gallery View** button in the top right.
+4. FileBrowser will automatically generate image thumbnails and allow you to swipe through your pictures.
+
+---
+
+### 3.2 Compressing and Optimizing Photos (PowerShell)
+To keep photo and video sizes under control, we can write a PowerShell script that runs every Sunday to locate and list large raw video files or compress redundant logs:
+
+Create `C:\Server\bin\clean-photo-logs.ps1`:
+
+```powershell
+# Directory containing uploaded media
+$PhotoDir = "D:\server-data\ocis-files\storage\users\*"
+
+# Search for video files larger than 500MB
+$LargeFiles = Get-ChildItem -Path $PhotoDir -Include *.mp4, *.mov -Recurve | Where-Object { $_.Length -gt 500MB }
+
+foreach ($file in $LargeFiles) {
+    # Log large files so you can manually review them or compress them
+    Add-Content -Path "C:\Server\logs\large-media.log" -Value "$(Get-Date): Large video file found: $($file.FullName) ($([math]::Round($file.Length/1MB, 2)) MB)"
+}
+```
+
+Schedule this script using Windows Task Scheduler to run weekly.
+
+By utilizing your laptop's 1TB HDD for camera backups and OCIS for background uploads, you get a secure, private, and unlimited photo storage solution for free.
+
+---
+
+*In the next part, we will replace paid password managers.*
+
+**[Proceed to Part 15: Replacing Paid Password Managers (1Password, Bitwarden Premium) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

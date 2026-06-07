@@ -1,0 +1,72 @@
+---
+title: "Part 14: Index Futures & Cash-Future Arbitrage"
+description: "Mastering futures trend following, index calendar spreads, and executing risk-free cash-futures arbitrage strategies in India."
+pubDate: 2026-06-07
+tags:
+  - Futures Trading
+  - Arbitrage
+  - Trend Following
+  - Calendar Spreads
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 14
+draft: false
+---
+
+# Part 14: Index Futures & Cash-Future Arbitrage
+
+Futures contracts allow traders to take leveraged directional bets on underlying
+indices (Nifty 50, Bank Nifty) and individual stocks. Since futures represent
+contracts for future delivery, they carry a **cost of carry** and are priced at a
+premium or discount to the spot market. This creates both high-leverage directional
+opportunities and risk-free arbitrage plays.
+
+---
+
+## 1. Cash-Future Arbitrage (Risk-Free Yield)
+
+Because of market inefficiencies, the futures price of a stock is often higher
+than its spot price by an amount greater than the prevailing interest rate.
+- **The Concept:** You buy 1 Lot of shares in the Cash segment (e.g. TCS Spot at ₹4000)
+  and simultaneously Sell (Short) 1 Lot of TCS Futures (e.g. TCS Future at ₹4025).
+- **The Payoff:** Since spot and future prices must converge to the exact same price
+  on the day of expiry, your net profit is locked in at ₹25 per share (₹4025 - ₹4000)
+  regardless of whether TCS goes up to ₹5000 or drops to ₹3000.
+- **Annualized Return:** Typically yields **8% to 12% p.a.** risk-free, making it an
+  excellent alternative to fixed deposits for short-term capital parking.
+
+---
+
+## 2. Futures Trend Following: 20 EMA + Supertrend
+
+A mechanical trend-following strategy on index futures.
+
+- **Instrument:** Nifty Near-Month Futures.
+- **Timeframe:** 15-minute chart.
+- **Indicators:** 20-period Exponential Moving Average (EMA) and Supertrend (10, 3).
+- **Long Entry:** Buy Nifty Futures when the 15m candle closes above the 20 EMA and
+  the Supertrend indicator is green.
+- **Short Entry:** Sell Nifty Futures when the 15m candle closes below the 20 EMA and
+  the Supertrend indicator is red.
+- **Stop Loss:** Placed at the Supertrend line or 1.5x the Average True Range (ATR).
+- **Profit Target:** Let the profits run; exit only when the opposite crossover signal occurs
+  (e.g., candle closes below 20 EMA while long).
+
+---
+
+## 3. Futures Calendar Spreads (Rollover Mispricing)
+
+Calendar spreads involve buying and selling futures of different expiries to capture
+premium expansion or contraction.
+- **Example Setup:** Buy Nifty Far-Month Future (e.g., next month expiry) and Sell
+  Nifty Near-Month Future (e.g., current month expiry).
+- **The Play:** You capture the difference in the roll-over premium. On expiry day,
+  the near-month futures converge to spot. If the far-month futures carry an
+  exaggerated premium, the spread widens, allowing you to square off for a profit.
+- **Margin benefit:** Exchange margins are significantly reduced (often by 80%) because
+  you hold a fully hedged calendar position.
+
+In the next part, we cover equity cash breakouts and Margin Trading Facility (MTF) leverage.
+
+**[Proceed to Part 15: Equity Cash & MTF Swing Trading →](/blog/wealth-and-options-automation/part-15-systematic-equity-mtf-swing-trading)**

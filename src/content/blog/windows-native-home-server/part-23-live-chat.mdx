@@ -1,0 +1,227 @@
+---
+title: "Windows Home Server — Part 23: Replacing Intercom & Live Chat (Self-Hosted Support Chat)"
+description: "Self-host Chatwoot or a lightweight Go chat widget behind Caddy to chat with your website visitors without Intercom subscriptions."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Nodejs
+  - Socket-io
+  - Support-Chat
+  - Live-Chat
+  - Self-Hosting
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 23
+draft: false
+---
+
+# Windows Home Server — Part 23: Replacing Intercom & Live Chat (Self-Hosted Support Chat)
+
+Live support widgets (like Intercom, Zendesk, or Crisp) charge subscription fees based on monthly active users, contact counts, or team sizes.
+
+We can host our own live chat widget on our Windows home server for free. We will write a lightweight **Node.js support chat server** using **Socket.io** for real-time bi-directional messaging, storing conversation histories in a local **SQLite database**, and forwarding alerts to your **Telegram bot** when a user starts a conversation.
+
+---
+
+## 1. Live Chat Architecture
+
+Our support chat uses WebSockets for real-time message exchange:
+
+```
+[Website Visitor] ──(WebSockets / Caddy)──> [Socket.io App: 8086] ──> [Telegram Alert]
+                                                  │
+                                          (Log Conversation)
+                                                  │
+                                                  ▼
+                                          [SQLite: chat.db]
+```
+
+---
+
+## 2. Implementing the Live Chat Server (Node.js)
+
+### Step 1: Create directories and install packages
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\support-chat"
+cd C:\Server\apps\support-chat
+npm init -y
+npm install express socket.io sqlite3 dotenv
+```
+
+### Step 2: Implement the Server
+Create `C:\Server\apps\support-chat\server.js`. This script serves the admin interface, manages Socket.io tunnels, logs history to SQLite, and alerts you via Telegram:
+
+```javascript
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const sqlite3 = require('sqlite3').verbose();
+const urllib = require('url');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' } });
+const PORT = 8086;
+
+const db = new sqlite3.Database('chat.db');
+
+// Initialize database schemas
+db.serialize(() => {
+    db.run('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, sender TEXT, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)');
+});
+
+// Admin Dashboard Route
+app.get('/admin', (req, res) => {
+    res.send(`
+        <html>
+            <head><title>Chat Admin</title></head>
+            <body style="font-family: sans-serif; background: #121212; color: #fff; padding: 2rem;">
+                <h1>Support Chat Admin Console</h1>
+                <div id="chats"></div>
+                <script src="/socket.io/socket.io.js"></script>
+                <script>
+                    const socket = io();
+                    socket.emit('admin-join');
+                    socket.on('message-received', (data) => {
+                        const div = document.createElement('div');
+                        div.innerHTML = '<b>' + data.sender + ':</b> ' + data.message;
+                        document.getElementById('chats').appendChild(div);
+                    });
+                </script>
+            </body>
+        </html>
+    `);
+});
+
+// WebSocket Connection Logic
+io.on('connection', (socket) => {
+    socket.on('join', (sessionId) => {
+        socket.join(sessionId);
+    });
+    
+    socket.on('admin-join', () => {
+        socket.join('admin-room');
+    });
+
+    socket.on('client-message', (data) => {
+        // Save to SQLite
+        db.run('INSERT INTO messages (session_id, sender, message) VALUES (?, ?, ?)', [data.sessionId, 'client', data.message]);
+        
+        // Forward to admin
+        io.to('admin-room').emit('message-received', { sender: 'client', message: data.message });
+        
+        // Alert Telegram Bot
+        sendTelegramAlert(`Support Chat: ${data.message}`);
+    });
+});
+
+function sendTelegramAlert(text) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId) return;
+    
+    const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(text)}`;
+    http.get(url).on('error', (err) => console.error(err.message));
+}
+
+server.listen(PORT, '127.0.0.1', () => {
+    console.log(`Support chat running on port ${PORT}`);
+});
+```
+
+Create `C:\Server\apps\support-chat\.env`:
+
+```env
+TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
+TELEGRAM_CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
+```
+
+---
+
+## 3. Creating the Client Widget
+
+Create `C:\Server\apps\support-chat\widget.js`. This is the client-side JavaScript script that renders the chat bubble and communicates with your server:
+
+```javascript
+(function() {
+    // Inject HTML bubble and widget stylesheet
+    const widget = document.createElement('div');
+    widget.style = "position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: #007bff; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-family: sans-serif; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);";
+    widget.innerText = "Chat";
+    document.body.appendChild(widget);
+
+    const chatWindow = document.createElement('div');
+    chatWindow.style = "position: fixed; bottom: 90px; right: 20px; width: 300px; height: 400px; background: #1e1e1e; border: 1px solid #333; display: none; flex-direction: column; font-family: sans-serif; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3);";
+    chatWindow.innerHTML = `
+        <div style="background: #007bff; color: white; padding: 10px; font-weight: bold;">Support Chat</div>
+        <div id="messages" style="flex: 1; padding: 10px; overflow-y: auto; color: white; font-size: 14px;"></div>
+        <input id="chat-input" style="width: 100%; border: none; padding: 10px; background: #333; color: white;" placeholder="Type a message..." />
+    `;
+    document.body.appendChild(chatWindow);
+
+    widget.addEventListener('click', () => {
+        chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    // Load socket.io-client script
+    const script = document.createElement('script');
+    script.src = "https://chat.yourdomain.com/socket.io/socket.io.js";
+    script.onload = () => {
+        const socket = io("https://chat.yourdomain.com");
+        const sessionId = Math.random().toString(36).substring(7);
+        socket.emit('join', sessionId);
+
+        const input = document.getElementById('chat-input');
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const message = input.value;
+                socket.emit('client-message', { sessionId, message });
+                
+                const msgDiv = document.createElement('div');
+                msgDiv.innerHTML = "<b>You:</b> " + message;
+                document.getElementById('messages').appendChild(msgDiv);
+                
+                input.value = '';
+            }
+        });
+    };
+    document.head.appendChild(script);
+})();
+```
+
+---
+
+## 4. Configuring Caddy and Wrapping in NSSM
+
+### Step 1: Caddy Integration
+Add the subdomain in `C:\Server\caddy\Caddyfile`:
+
+```caddy
+chat.yourdomain.com {
+    reverse_proxy localhost:8086
+}
+```
+
+Restart Caddy (`nssm restart Caddy`).
+
+### Step 2: Wrap Service in NSSM
+Create the service:
+
+```powershell
+nssm install SupportChat node.exe "C:\Server\apps\support-chat\server.js"
+nssm set SupportChat AppDirectory "C:\Server\apps\support-chat"
+nssm start SupportChat
+```
+
+Include `widget.js` on your public websites. By hosting this chat, you establish a real-time visitor chat system with SQLite archives and direct Telegram alerts, replacing paid live chat services for free.
+
+---
+
+*In the next part, we will replace paid form builders.*
+
+**[Proceed to Part 24: Replacing Typeform & Jotform (Self-Hosted Form Endpoints) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

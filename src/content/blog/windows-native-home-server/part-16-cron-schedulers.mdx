@@ -1,0 +1,173 @@
+---
+title: "Windows Home Server — Part 16: Replacing Paid Cron & Event Schedulers (Cronitor, AWS EventBridge)"
+description: "Schedule background scripts natively using Windows Task Scheduler, with execution logs, log rotation, and instant failure alerts pushed to Telegram."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Task-Scheduler
+  - PowerShell
+  - Schedulers
+  - Telegram
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 16
+draft: false
+---
+
+# Windows Home Server — Part 16: Replacing Paid Cron & Event Schedulers (Cronitor, AWS EventBridge)
+
+Cloud scheduling tools like Cronitor, AWS EventBridge, and Google Cloud Scheduler charge based on job executions, and charge extra for features like alerting.
+
+We can run complex scheduled tasks on bare-metal Windows for free. We will use the built-in **Windows Task Scheduler** combined with a custom **PowerShell wrapper script**. This wrapper executes any scheduled script, logs its console output, monitors its runtime duration, and sends a **Telegram notification** if the script fails.
+
+---
+
+## 1. The Wrapper Architecture
+
+A common issue with schedulers is silent failures. If a script crashes, the scheduler reports it, but you are not notified. Our PowerShell wrapper captures these exceptions:
+
+```
+[Task Scheduler] ──> [run-task.ps1] ──> Executes: [target-script.ps1]
+                           │
+                 Did it exit with Code 0?
+                 /                    \
+              (Yes)                   (No)
+               /                        \
+      [Log Success]             [Send Telegram Alert]
+```
+
+---
+
+## 2. Implementing the PowerShell Task Wrapper
+
+Create `C:\Server\bin\run-task.ps1`. This script wraps the execution of your target scripts, checks their exit codes, and alerts you on failures:
+
+```powershell
+param (
+    [string]$TaskName,
+    [string]$ScriptPath,
+    [string]$Arguments = ""
+)
+
+# Configurations
+$LogFile = "C:\Server\logs\tasks.log"
+$TelegramToken = "YOUR_TELEGRAM_BOT_TOKEN"
+$TelegramChatId = "YOUR_TELEGRAM_CHAT_ID"
+
+function Send-TelegramAlert ($msg) {
+    $body = @{
+        chat_id = $TelegramChatId
+        text = "🚨 Task Failure: $msg"
+    } | ConvertTo-Json
+    $uri = "https://api.telegram.org/bot$TelegramToken/sendMessage"
+    Invoke-RestMethod -Uri $uri -Method Post -Body $body -ContentType "application/json" | Out-Null
+}
+
+$StartTime = Get-Date
+Add-Content -Path $LogFile -Value "[$StartTime] START task '$TaskName' executing '$ScriptPath'"
+
+try {
+    # Start the target script, capturing output and exit codes
+    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $processInfo.FileName = "powershell.exe"
+    $processInfo.Arguments = "-ExecutionPolicy Bypass -File `"$ScriptPath`" $Arguments"
+    $processInfo.RedirectStandardOutput = $true
+    $processInfo.RedirectStandardError = $true
+    $processInfo.UseShellExecute = $false
+    $processInfo.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $processInfo
+    $process.Start() | Out-Null
+
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    $ExitCode = $process.ExitCode
+    $EndTime = Get-Date
+    $Duration = ($EndTime - $StartTime).TotalSeconds
+
+    if ($ExitCode -ne 0) {
+        # Task failed
+        Add-Content -Path $LogFile -Value "[$EndTime] FAILED task '$TaskName' (Exit Code: $ExitCode) in $Duration seconds`nErrors: $stderr"
+        Send-TelegramAlert "Task '$TaskName' failed with exit code $ExitCode in $Duration seconds.`nErrors: $stderr"
+    } else {
+        # Task succeeded
+        Add-Content -Path $LogFile -Value "[$EndTime] SUCCESS task '$TaskName' in $Duration seconds."
+    }
+} catch {
+    # Wrapper level crash
+    $EndTime = Get-Date
+    Add-Content -Path $LogFile -Value "[$EndTime] CRITICAL EXCEPTION running '$TaskName': $_"
+    Send-TelegramAlert "Critical error running task '$TaskName': $_"
+}
+```
+
+---
+
+## 3. Scheduling a Task via Command Line
+
+We can schedule our wrapper to run tasks using PowerShell's built-in scheduling cmdlets.
+
+Let's schedule our **Database Backup Script** (from Part 10) to run daily at `03:00 AM`:
+
+```powershell
+# Define action pointing to our wrapper, passing the script parameters
+$Action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-ExecutionPolicy Bypass -File C:\Server\bin\run-task.ps1 -TaskName 'DatabaseBackup' -ScriptPath 'C:\Server\bin\backup-databases.ps1'"
+
+# Define daily trigger
+$Trigger = New-ScheduledTaskTrigger -Daily -At "3:00 AM"
+
+# Define execution settings (run under SYSTEM account so it runs headlessly)
+$Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+# Register the task
+Register-ScheduledTask `
+    -TaskName "Server-Database-Backup" `
+    -Action $Action `
+    -Trigger $Trigger `
+    -Principal $Principal
+```
+
+---
+
+## 4. Alternative: Node-Cron in PM2
+
+If you are a Node.js developer, you can schedule tasks directly in your JavaScript applications and manage them using PM2.
+
+Install **node-cron** inside your Node directory:
+
+```powershell
+cd C:\Server\apps\
+npm install node-cron
+```
+
+Create a script `C:\Server\apps\cron-job.js`:
+
+```javascript
+const cron = require('node-cron');
+const { exec } = require('child_process');
+
+// Run every hour
+cron.schedule('0 * * * *', () => {
+    console.log('Running hourly logs rotation...');
+    exec('powershell.exe -File C:\\Server\\bin\\rotate-logs.ps1', (err, stdout, stderr) => {
+        if (err) {
+            console.error(`Cron job failed: ${err.message}`);
+        }
+    });
+});
+```
+
+Using Windows Task Scheduler for system-level scripts and PM2 with Node-Cron for application tasks gives you a robust, zero-cost scheduling solution, replacing paid SaaS monitors for free.
+
+---
+
+*In the next part, we will replace paid link-in-bio and URL shortener tools.*
+
+**[Proceed to Part 17: Replacing Paid Link Shorteners & Bio-Links (Linktree, Bitly) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

@@ -1,0 +1,139 @@
+---
+title: "Part 4: The Zero-Cost Indian Trading API Landscape"
+description: "A comprehensive breakdown of broker APIs, brokerage fees, AMC, and data costs (WebSocket feeds vs. historical candles) for automated trading in India."
+pubDate: 2026-06-07
+tags:
+  - Broker
+  - API
+  - Zerodha
+  - Shoonya
+  - Flattrade
+  - Data Feeds
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 4
+draft: false
+---
+
+# Part 4: The Zero-Cost Indian Trading API Landscape
+
+In automated options trading, **transaction costs** are the difference between a
+profitable system and a losing one. Because we execute multi-leg strategies
+(like the 4-leg Iron Condor or Iron Butterfly), we can quickly consume our profits
+in brokerage and API fees if we choose the wrong broker.
+
+Furthermore, a critical factor often overlooked is **market data cost**. Many
+brokers offer free APIs for order execution but charge subscription fees or have
+complex conditions for real-time WebSocket feeds and historical candle data.
+
+Let's evaluate the top brokers in India and their exact data fee structures.
+
+---
+
+## 1. Detailed Broker & Data Cost Comparison (June 2026)
+
+### A. Flattrade
+*   **F&O Brokerage:** **₹0** (Completely free for all segments).
+*   **Account Opening & AMC:** ₹200 + GST opening fee; **₹0 AMC** (Lifetime free).
+*   **API Execution Cost:** **₹0** (Free developer API access).
+*   **Real-Time Data (WebSocket):** **Free.** Allows streaming live ticks across
+    all contracts.
+*   **Historical Data API:** **Free.** Supports fetching historical time-price series
+    and daily candles directly via their PiConnect API endpoints.
+*   **Verdict:** **The absolute cheapest setup for developers.** Both execution
+    and complete data (real-time + historical) are completely free.
+
+### B. Shoonya (by Finvasia)
+*   **F&O Brokerage:** **₹5 per executed order** (or 0.03%, whichever is lower).
+*   **Account Opening & AMC:** **₹0** opening; **₹0 AMC**.
+*   **API Execution Cost:** **₹0** (Free developer REST APIs).
+*   **Real-Time Data (WebSocket):** **Free.** Provides unlimited live tick streaming
+    via their WebSockets.
+*   **Historical Data API:** **Free.** Access to historical candles is fully integrated
+    via endpoints like `get_time_price_series` with no charges.
+*   **Verdict:** Highly reliable and extremely cost-effective. Excellent documentation
+    and community SDK support (`ShoonyaApi-py`).
+
+### C. Kotak Neo
+*   **F&O Brokerage:** Flat ₹10 per order (Waived to **₹0** under the **Trade Free
+    Youth Plan** for users under 30).
+*   **Account Opening & AMC:** ₹0 opening; ₹50 + GST/month AMC (Waived on Youth Plan).
+*   **API Execution Cost:** **₹0** (Free Trade API).
+*   **Real-Time Data (WebSocket):** **Free.** Live tick feeds for stocks and indices
+    are available via their WebSocket client.
+*   **Historical Data API:** **Not Available.** The native Kotak Neo API is built purely
+    for execution and lacks historical candle endpoints. Developers must source historical
+    data separately (using free libraries like `yfinance` or paid APIs like TrueData).
+*   **Verdict:** Great for executing trades for under-30s, but requires outside
+    integration for backtesting data.
+
+### D. Dhan
+*   **F&O Brokerage:** Flat ₹20 per executed order.
+*   **Account Opening & AMC:** ₹0 opening; ₹0 AMC.
+*   **API Execution Cost:** **₹0** (Free DhanHQ execution APIs).
+*   **Real-Time Data (WebSocket) & Historical Data:** **Conditional.** Accessing
+    the Data API costs **₹499 + taxes per month**. However, this fee is waived
+    (making data completely free) if you execute at least **25 trades in the last
+    30 days**.
+*   **Verdict:** Best for active traders. If you run daily weekly strategies, you
+    easily bypass the ₹499 fee and get premium tick/candle data for free.
+
+### E. Angel One (SmartAPI)
+*   **F&O Brokerage:** Flat ₹20 per executed order.
+*   **Account Opening & AMC:** ₹0 opening; ₹0 AMC for the first year, then ₹240/year.
+*   **API Execution Cost:** **₹0** (Free SmartAPI access).
+*   **Real-Time Data (WebSocket):** **Free.**
+*   **Historical Data API:** **Free.** Provides standard historical candle APIs
+    for registered accounts without subscriptions.
+*   **Verdict:** High reliability with standard brokerage. Free execution and free data
+    feeds.
+
+### F. Zerodha (Kite Connect)
+*   **F&O Brokerage:** Flat ₹20 per executed order.
+*   **Account Opening & AMC:** ₹200 opening; ₹300 + GST/year AMC (1st year free for
+    resident individual accounts opened after June 1, 2026).
+*   **API Execution Cost:** **₹0** under the Personal execution tier.
+*   **Real-Time Data (WebSocket) & Historical Data:** **Paid (₹500/month).** The
+    Personal free tier does *not* include any data feeds. To access WebSocket ticks
+    and historical OHLC candle endpoints, you must subscribe to the Connect tier for
+    ₹500/month.
+*   **Verdict:** The gold standard in API stability, but carries a fixed monthly
+    overhead of ₹500.
+
+---
+
+## 2. Summary: Do I Have to Buy Data Separately?
+
+To keep our database-backed paper trading and backtesting stack completely free, we
+recommend:
+1.  **For execution + data:** Use **Flattrade** or **Shoonya**. Both provide both
+    execution and data feeds (real-time WebSockets and historical candles) for ₹0
+    overhead.
+2.  **For execution-only with separate data:** If you use **Kotak Neo** (due to the
+    Youth Plan), you can code your execution through their API and fetch free daily
+    historical candles using python libraries like `yfinance` or `jugaad-data`.
+
+---
+
+## 3. The Statutory "Hidden" Costs
+
+Even with a ₹0-brokerage broker like Flattrade, you must pay mandatory taxes
+and exchange fees on every F&O trade. These include:
+
+*   **Securities Transaction Tax (STT):** 0.125% on the premium value when selling options.
+*   **Exchange Transaction Charges:** 0.0495% on the premium value charged by NSE.
+*   **SEBI Turnover Fee:** 0.0001% (₹10 per crore) of the premium value.
+*   **GST:** 18% of (Brokerage + Exchange Charges + SEBI Fees).
+*   **Stamp Duty:** 0.003% on buy option premium values.
+
+### The Impact of Slippage
+In options trading, **slippage** (the difference between your target price and
+the actual executed price) is a major cost. If you execute market orders on illiquid
+strikes, slippage can cost you 1% to 2% of the premium value. Always use **Limit
+Orders** in your automated script to control entry and exit prices.
+
+In the next part, we will compare self-coding your bot in Python against using
+managed no-code platforms.
+
+**[Proceed to Part 5: Coding vs. Managed Platforms: The Ultimate Algo-Trading Guide →](/blog/wealth-and-options-automation/part-05-coding-vs-managed-platforms)**

@@ -1,0 +1,212 @@
+---
+title: "Windows Home Server — Part 24: Replacing Typeform & Jotform (Self-Hosted Form Endpoints)"
+description: "Build a custom Node/Python form handler that registers submissions in a local SQLite database and forwards entries directly to Telegram."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Nodejs
+  - Form-Builders
+  - Typeform
+  - SQLite
+  - Databases
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 24
+draft: false
+---
+
+# Windows Home Server — Part 24: Replacing Typeform & Jotform (Self-Hosted Form Endpoints)
+
+Form builders like Typeform, Jotform, or Formspree limit monthly submissions (often to just 50 or 100 entries) and charge significant subscription fees to unlock custom redirects and email notifications.
+
+We can run our own form-backend engine natively on Windows. We will write a lightweight **Node.js form handler** that accepts submissions from static contact forms, saves them to a local **SQLite database**, handles cross-origin requests (**CORS**), and alerts you via **Telegram** the instant a form is submitted.
+
+---
+
+## 1. Form Ingress Pipeline
+
+Our static landing page hosted on **Cloudflare Pages** will post form submissions to our home server subdomain:
+
+```
+[Static Website Form] ──(HTTP POST JSON)──> [forms.yourdomain.com]
+                                                    │
+                                         (Caddy Proxy to Port 8087)
+                                                    │
+                                                    ▼
+   [Telegram Bot Notification] <── [Form Handler Node Server] ──> [SQLite: forms.db]
+```
+
+---
+
+## 2. Implementing the Form Handler Server (Node.js)
+
+### Step 1: Create directories and install packages
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\form-handler"
+cd C:\Server\apps\form-handler
+npm init -y
+npm install express sqlite3 cors dotenv
+```
+
+### Step 2: Implement the Server
+Create `C:\Server\apps\form-handler\server.js`. This script handles CORS, writes submissions to SQLite, redirects users to a thank-you page, and sends Telegram alerts:
+
+```javascript
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
+const http = require('https');
+
+const app = express();
+const PORT = 8087;
+const db = new sqlite3.Database('submissions.db');
+
+// Initialize Database
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS forms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_page TEXT,
+            name TEXT,
+            email TEXT,
+            message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+});
+
+// Configure CORS: Allow only your static Cloudflare Pages site to submit forms
+app.use(cors({
+    origin: 'https://yourdomain.com'
+}));
+
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Handle Submissions
+app.post('/submit', (req, res) => {
+    const { name, email, message, source } = req.body;
+    const sourcePage = source || 'Unknown';
+
+    if (!name || !email || !message) {
+        return res.status(400).send('Bad Request: Missing required fields');
+    }
+
+    // Save to SQLite
+    db.run(
+        'INSERT INTO forms (source_page, name, email, message) VALUES (?, ?, ?, ?)',
+        [sourcePage, name, email, message],
+        function(err) {
+            if (err) {
+                console.error('Database write error:', err.message);
+                return res.status(500).send('Database error');
+            }
+
+            // Alert via Telegram
+            const alertText = `📝 Form Submission [${sourcePage}]:\nName: ${name}\nEmail: ${email}\nMessage: ${message}`;
+            sendTelegramNotification(alertText);
+
+            // Redirect user to static success page on Cloudflare Pages
+            res.redirect('https://yourdomain.com/thank-you.html');
+        }
+    );
+});
+
+function sendTelegramNotification(text) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId) return;
+
+    const data = JSON.stringify({
+        chat_id: chatId,
+        text: text
+    });
+
+    const options = {
+        hostname: 'api.telegram.org',
+        port: 443,
+        path: `/bot${token}/sendMessage`,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': data.length
+        }
+    };
+
+    const req = http.request(options);
+    req.write(data);
+    req.end();
+}
+
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Form handler running on port ${PORT}`);
+});
+```
+
+Create `C:\Server\apps\form-handler\.env`:
+
+```env
+TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
+TELEGRAM_CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
+```
+
+---
+
+## 3. Integrating with a HTML Form
+
+Add this HTML form snippet to your static website hosted on Cloudflare Pages:
+
+```html
+<form action="https://forms.yourdomain.com/submit" method="POST">
+  <!-- Let the server know which site submitted the form -->
+  <input type="hidden" name="source" value="Contact Us Page" />
+  
+  <label for="name">Name:</label>
+  <input type="text" id="name" name="name" required />
+
+  <label for="email">Email:</label>
+  <input type="email" id="email" name="email" required />
+
+  <label for="message">Message:</label>
+  <textarea id="message" name="message" required></textarea>
+
+  <button type="submit">Send Message</button>
+</form>
+```
+
+---
+
+## 4. Configuring Caddy and Wrapping in NSSM
+
+### Step 1: Caddy Integration
+Add the subdomain block to `C:\Server\caddy\Caddyfile`:
+
+```caddy
+forms.yourdomain.com {
+    reverse_proxy localhost:8087
+}
+```
+
+Restart Caddy (`nssm restart Caddy`).
+
+### Step 2: Wrap Service in NSSM
+Create the service:
+
+```powershell
+nssm install FormHandler node.exe "C:\Server\apps\form-handler\server.js"
+nssm set FormHandler AppDirectory "C:\Server\apps\form-handler"
+nssm start FormHandler
+```
+
+By deploying this endpoint, you get an unlimited form submission backend storing entries in SQLite and alerting you on Telegram, replacing paid form builder services for free.
+
+---
+
+*In the final part, we will review the migration checklist to move your production databases and apps from AWS/VPS to your home server.*
+
+**[Proceed to Part 25: The Ultimate Home Server Migration Checklist →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

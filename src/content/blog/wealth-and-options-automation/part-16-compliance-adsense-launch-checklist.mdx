@@ -1,0 +1,89 @@
+---
+title: "Part 16: Legal Compliance, AdSense, and Production Launch Checklist"
+description: "Ensure your trading operations and blog monetization are compliant with SEBI regulations, optimized for Google AdSense, and ready for production."
+pubDate: 2026-06-07
+tags:
+  - Compliance
+  - SEBI
+  - AdSense
+  - Checklist
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 16
+draft: false
+---
+
+# Part 16: Legal Compliance, AdSense, and Production Launch Checklist
+
+In this final part of the series, we cover the operational steps required to make
+your blog and automated trading system legally sound, monetizable, and ready
+for live deployment.
+
+---
+
+## 1. SEBI Compliance & Legal Disclaimers
+
+In India, the Securities and Exchange Board of India (SEBI) regulates investment
+advising and research. If you write about trading strategies or show trading logs,
+you must protect yourself legally to avoid compliance issues:
+- **No Advisory Language:** Never say \"Buy Nifty 24000 CE now\" or promise
+  guaranteed returns.
+- **SEBI Disclaimer:** Place a prominent disclaimer on your blog:
+  > **Educational Disclaimer:** *I am not a SEBI registered investment advisor
+  > or research analyst. All content, strategies, code templates, and trade logs
+  > shared on this blog are for educational purposes only. Options trading
+  > involves significant financial risk. Please consult a certified financial
+  > advisor before trading with real capital.*
+
+---
+
+## 2. Google AdSense Readiness for Blog Monetization
+
+If you want to earn passive income from your blog traffic via Google AdSense, you
+must ensure your site structure complies with their guidelines:
+
+### Essential Legal Pages:
+Create these pages in your Astro blog. They can be auto-generated using standard
+legal generators:
+1.  **Privacy Policy:** Detailing how you collect cookies and handle user data.
+2.  **Terms of Service:** Operating rules of the website.
+3.  **Cookie Policy:** Detailing the use of local analytics beacons.
+4.  **Contact Us:** Providing routing emails (e.g. `support@oriz.in`).
+
+### AdSense Optimizations:
+- **Fast Loading (Core Web Vitals):** Ensure your Lighthouse score remains high
+  by using Astro's static generation and lazy loading images.
+- **`ads.txt` Integration:** Create a file named `ads.txt` in your `public/` directory:
+  ```
+  google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+  ```
+  *Replace `pub-XXXXXXXXXXXXXXXX` with your actual AdSense publisher ID.* This prevents
+  domain spoofing and ensures AdSense approves your account.
+
+---
+
+## 3. The 10-Step Production Launch Checklist
+
+Before transitioning from paper trading to live trading with your **₹1-2 Lakh** capital:
+
+1.  **[ ] Master the Syllabus:** Complete Zerodha Varsity options modules and read Sheldon Natenberg.
+2.  **[ ] Run Paper Trading for 30 Days:** Ensure your script operates on GitHub Actions without execution errors.
+3.  **[ ] Account for Slippage:** Confirm your strategy remains profitable in the paper engine with 1% simulated slippage.
+4.  **[ ] Double-Check API Credentials:** Secure all keys and TOTP codes in GitHub Repository Secrets.
+5.  **[ ] Enable Max Daily Loss Guard:** Verify that your portfolio-level stop-loss logic triggers and exits successfully.
+6.  **[ ] Test Order Execution Priority:** Ensure buy orders are executed first to guarantee margin benefits before short orders are placed.
+7.  **[ ] Deploy Telegram Notifications:** Verify you receive real-time tick MTM status updates on your phone.
+8.  **[ ] Allocate Lean Capital:** Start with 1 Lot of Nifty (requires ~₹50,000 margin for Iron Condors) to test real-world executions.
+9.  **[ ] Audit Taxes & Brokerage:** Run a cost audit after the first week of live trading to verify your broker's actual fee structure.
+10. **[ ] Maintain Strict Discipline:** Do not override the bot's decisions manually. Let the algorithm execute the edge.
+
+---
+
+## 4. Conclusion
+
+Escaping the linear salary trap requires building systems. By combining software development skills with disciplined options strategies and serverless edge tools, you can run a production-grade algorithmic trading business for free.
+
+Use this roadmap as your foundation, keep your infrastructure costs at zero, and let the mathematics of time decay compound your wealth.
+
+**[Proceed to Bonus: The Ultimate AI Prompt to Build the Paper Trading Engine →](/blog/wealth-and-options-automation/verylongprompt)**

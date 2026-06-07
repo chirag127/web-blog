@@ -1,0 +1,112 @@
+---
+title: "Windows Home Server — Part 13: Replacing Paid VPNs & Team Access (Private WireGuard & Tailscale)"
+description: "Enable remote server access and create a private overlay mesh network for all user devices at zero cost using Tailscale's free tier."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - VPN
+  - Tailscale
+  - Remote-Access
+  - WireGuard
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 13
+draft: false
+---
+
+# Windows Home Server — Part 13: Replacing Paid VPNs & Team Access (Private WireGuard & Tailscale)
+
+If you need to manage your home server remotely, configure private tools, or connect databases securely across devices, exposing these endpoints to the public web introduces security vulnerabilities. Relying on commercial VPN subscriptions or business access gateways (like AWS Client VPN) can become expensive.
+
+We can establish a highly secure, peer-to-peer overlay network using **Tailscale** (built on top of the **WireGuard** protocol). Tailscale's free tier allows up to **3 users and 100 devices** with zero configuration, allowing you to access local databases, SSH ports, and monitoring dashboards from anywhere in the world.
+
+---
+
+## 1. How a Peer-to-Peer Mesh VPN Works
+
+Unlike traditional hub-and-spoke VPNs (where all traffic goes through a single central server), Tailscale coordinates direct encrypted tunnels between your devices:
+
+```
+[Mobile Phone] <═════(Encrypted WireGuard)═════> [Windows Home Server]
+      │                                                   │
+      └───────────(Tailscale Coordinate Server)───────────┘
+```
+
+1. Your phone and server query Tailscale's control plane to exchange public keys and local network locations.
+2. An direct, encrypted WireGuard tunnel is established peer-to-peer.
+3. Traffic does not flow through Tailscale's servers, maximizing speed.
+
+---
+
+## 2. Installing Tailscale on Windows
+
+### Step 1: Install Tailscale
+Open PowerShell as Administrator and run:
+
+```powershell
+winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
+```
+
+This installs Tailscale as a background Windows Service automatically.
+
+### Step 2: Authenticate the Server
+Run the login command in PowerShell:
+
+```powershell
+tailscale up
+```
+
+This will print a URL. Open it, log in with your account, and your server will receive a permanent IP address (in the `100.64.0.0/10` range) and a private domain name (like `homeserver.your-tailnet.ts.net`).
+
+---
+
+## 3. High-Value Network Configurations
+
+Tailscale offers several built-in tools that replace enterprise network hardware:
+
+### 3.1 Enabling Subnet Routing
+If you want your remote devices (like your phone on mobile data) to access other devices on your home LAN (like a printer, router, or local NAS) that don't have Tailscale installed:
+
+1. Enable IP forwarding on Windows by running this PowerShell command:
+   ```powershell
+   Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "IPEnableRouter" -Value 1
+   ```
+2. Start Tailscale, advertising your home network's IP range (e.g., `192.168.1.0/24`):
+   ```powershell
+   tailscale up --advertise-routes=192.168.1.0/24
+   ```
+3. Go to the Tailscale Admin Console web UI, find your Windows server, click **Edit Route Settings**, and enable the advertised route.
+
+### 3.2 Configuring an Exit Node (Secure Public Browsing)
+If you are traveling and connected to an untrusted public Wi-Fi network, you can route all of your internet traffic securely through your home server's internet connection.
+
+1. Advertise your server as an exit node:
+   ```powershell
+   tailscale up --advertise-exit-node
+   ```
+2. Log into the Tailscale Admin Console, go to your server's settings, and toggle **Use as exit node** on.
+3. On your phone or remote client, open the Tailscale app, click **Exit Node**, and select your Windows server. All your traffic is now encrypted and routed securely through your home network.
+
+### 3.3 Tailscale Funnel (Quick Local Exposing)
+If you need to share a local development server with a friend or colleague temporarily without editing your Cloudflare Tunnel config, use **Tailscale Funnel**:
+
+```powershell
+# Expose local port 3000 to the public internet via Tailscale's edge proxies
+tailscale funnel 3000
+```
+
+This makes your local app instantly accessible at `https://homeserver.your-tailnet.ts.net`. To stop exposing, run:
+
+```powershell
+tailscale funnel off 3000
+```
+
+By using Tailscale, you get a secure, low-latency, and zero-maintenance VPN that secures your private dashboards and remote connections without monthly subscription fees.
+
+---
+
+*In the next part, we will replace paid photo storage services like Google Photos.*
+
+**[Proceed to Part 14: Replacing Google Photos & iCloud (Self-Hosted Photo Storage) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

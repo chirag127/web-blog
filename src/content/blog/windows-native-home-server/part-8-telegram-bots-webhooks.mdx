@@ -1,0 +1,200 @@
+---
+title: "Windows Home Server — Part 8: Self-Hosting Telegram Bots, Webhooks, and Event-Driven Services"
+description: "Run native Telegram bots on Windows, routing webhooks through Caddy with automated HTTPS certificates to enable zero-latency, polling-free bot performance."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Telegram-Bots
+  - Webhooks
+  - Nodejs
+  - Event-Driven
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 8
+draft: false
+---
+
+# Windows Home Server — Part 8: Self-Hosting Telegram Bots, Webhooks, and Event-Driven Services
+
+Most Telegram bot tutorials rely on **long polling** (`getUpdates`), where the bot constantly queries the Telegram servers for new messages. This is highly inefficient: it wastes CPU cycles, creates network noise, and introduces a delay of up to several seconds for every message response.
+
+The professional way to run bots is via **webhooks**. When a user sends a message, Telegram makes an instantaneous HTTP POST request to your home server. 
+
+Telegram requires webhooks to run over secure **HTTPS with a valid SSL certificate**. We will use our native Caddy Server to terminate the SSL and forward the request to a native Node.js bot running on Windows.
+
+---
+
+## 1. Webhook Architecture and Security
+
+Because our webhook endpoint is exposed to the public internet, we must secure it against malicious traffic. We will restrict requests using a secret URL token:
+
+```
+[Telegram Server] ──> HTTPS POST (bot.yourdomain.com/webhook/SECRET_TOKEN) ──> [Caddy Server]
+                                                                                      │
+                                                                           (Local Proxy Port 8085)
+                                                                                      │
+                                                                                      ▼
+                                                                           [Node.js Bot Service]
+```
+
+Without the `SECRET_TOKEN` in the URL path, Caddy or our Node app will reject the request immediately with a `403 Forbidden` status code, preventing unauthorized traffic from hitting our CPU.
+
+---
+
+## 2. Creating your Telegram Bot
+
+1. Open Telegram and search for the **`@BotFather`** account.
+2. Send the command `/newbot`.
+3. Choose a name and a username for your bot.
+4. Copy the generated **HTTP API Token** (we will refer to this as `YOUR_BOT_TOKEN`).
+
+---
+
+## 3. Implementing the Webhook Server (Node.js)
+
+We will use the **grammY** library, an extremely fast and lightweight Telegram bot framework for Node.js.
+
+### Step 1: Create directories and install packages
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\telegram-bot"
+cd C:\Server\apps\telegram-bot
+npm init -y
+npm install grammy express dotenv
+```
+
+### Step 2: Write the Bot Code
+Create `C:\Server\apps\telegram-bot\bot.js`:
+
+```javascript
+require('dotenv').config();
+const { Bot, webhookCallback } = require('grammy');
+const express = require('express');
+
+// Ensure token is present
+const token = process.env.TELEGRAM_BOT_TOKEN;
+if (!token) {
+    console.error("TELEGRAM_BOT_TOKEN is missing!");
+    process.exit(1);
+}
+
+const bot = new Bot(token);
+const app = express();
+const PORT = 8085;
+
+// Bot behavior
+bot.command('start', (ctx) => ctx.reply('👋 Welcome to your Bare-Metal Windows Home Server bot!'));
+bot.command('status', (ctx) => {
+    const uptime = process.uptime();
+    const formattedUptime = new Date(uptime * 1000).toISOString().substr(11, 8);
+    ctx.reply(`📊 Server Status:\nHost: Windows 10/11\nUptime: ${formattedUptime}`);
+});
+bot.on('message', (ctx) => ctx.reply(`Received: ${ctx.message.text}`));
+
+// Apply middleware
+app.use(express.json());
+
+// Secure Webhook endpoint
+const secretPath = `/webhook/${process.env.WEBHOOK_SECRET}`;
+app.post(secretPath, webhookCallback(bot, 'express'));
+
+// Catch-all block to block unauthorized requests
+app.use((req, res) => {
+    res.status(403).send('Forbidden');
+});
+
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Telegram bot listening on port ${PORT}`);
+});
+```
+
+### Step 3: Write the Environment Configuration
+Create `C:\Server\apps\telegram-bot\.env`:
+
+```env
+TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
+# Generate a random string of characters for your webhook secret
+WEBHOOK_SECRET="a_very_long_secure_random_string_12345"
+```
+
+---
+
+## 4. Configuring Caddy for Secure Webhook Ingress
+
+Open `C:\Server\caddy\Caddyfile` and add a new subdomain configuration block:
+
+```caddy
+# Telegram bot routing
+bot.yourdomain.com {
+    # Match only our secret webhook path
+    @allowed_webhook {
+        path /webhook/a_very_long_secure_random_string_12345
+    }
+    
+    # Reverse proxy to the local port only for the allowed path
+    handle @allowed_webhook {
+        reverse_proxy localhost:8085
+    }
+    
+    # Reject everything else
+    handle {
+        respond "Forbidden" 403
+    }
+}
+```
+
+*Ensure the `WEBHOOK_SECRET` value in Caddy matches the one in `.env`.*
+
+Restart Caddy:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 5. Wrapping the Bot in NSSM and Registering Webhook
+
+### Step 1: Create the Startup script
+Create `C:\Server\apps\telegram-bot\start-bot.ps1`:
+
+```powershell
+cd C:\Server\apps\telegram-bot
+node bot.js
+```
+
+### Step 2: Install Bot as a Windows Service
+Run:
+
+```powershell
+nssm install TelegramBot powershell.exe "-ExecutionPolicy Bypass -File C:\Server\apps\telegram-bot\start-bot.ps1"
+nssm start TelegramBot
+```
+
+### Step 3: Register the Webhook with Telegram's Servers
+We must tell Telegram to forward messages to our server. We can trigger this registration by calling Telegram's Webhook API.
+
+Run this command in PowerShell, replacing the placeholders with your values:
+
+```powershell
+$BotToken = "YOUR_BOT_TOKEN"
+$WebhookSecret = "a_very_long_secure_random_string_12345"
+$Domain = "bot.yourdomain.com"
+
+# API Call
+Invoke-RestMethod -Uri "https://api.telegram.org/bot$BotToken/setWebhook?url=https://$Domain/webhook/$WebhookSecret"
+```
+
+You should see a JSON response: `{"ok":true,"result":true,"description":"Webhook was set"}`.
+
+### Step 4: Verify Operation
+Open Telegram, open a chat with your bot, and send `/status`. It should respond instantly—confirming the event pipeline is running natively on Windows with zero-latency.
+
+---
+
+*In the next part, we will implement a GitOps pipeline to auto-deploy changes to our server.*
+
+**[Proceed to Part 9: PaaS Replacements & GitOps (Heroku/Railway Alternatives) →](/blog/windows-native-home-server/part-9-gitops-free-tier-integration)**

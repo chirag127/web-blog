@@ -1,0 +1,203 @@
+---
+title: "Windows Home Server — Part 17: Replacing Paid Link Shorteners & Bio-Links (Linktree, Bitly)"
+description: "Deploy a native instance of LinkStack or a lightweight URL shortener behind Caddy to manage link redirection under a custom subdomain."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Nodejs
+  - URL-Shortener
+  - Redirects
+  - Linktree
+  - Bitly
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 17
+draft: false
+---
+
+# Windows Home Server — Part 17: Replacing Paid Link Shorteners & Bio-Links (Linktree, Bitly)
+
+Redirection services like Bitly and Linktree charge subscription fees for features like custom domain mapping, detailed click analytics, and logo customization.
+
+We can run our own fast URL shortener natively on Windows for free. We will write a lightweight **Node.js application** that reads redirects from a local config file, performs instant redirections, and logs click events (timestamp, destination, and user agent) to a local **SQLite database** for custom analytics.
+
+---
+
+## 1. Shortener Architecture
+
+Our application is built for high speed. Since it is written in Node.js and runs natively, redirects take less than 10 milliseconds:
+
+```
+[User clicks: lnk.yourdomain.com/blog]
+                     │
+                     ▼
+              [Caddy Server]
+                     │
+           (Proxy to Local Port 8089)
+                     │
+                     ▼
+             [Node.js Redirector] ──(Log Click)──> [SQLite: clicks.db]
+                     │
+             (302 Redirect Header)
+                     │
+                     ▼
+       [https://blog.oriz.in/...]
+```
+
+---
+
+## 2. Implementing the Redirector Application
+
+### Step 1: Create directories and install packages
+Run in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "C:\Server\apps\shortener"
+cd C:\Server\apps\shortener
+npm init -y
+npm install express sqlite3
+```
+
+### Step 2: Write the Redirection Database
+Create a JSON file `C:\Server\apps\shortener\redirects.json` containing your short-links:
+
+```json
+{
+  "github": "https://github.com/chirag127",
+  "blog": "https://blog.oriz.in",
+  "linkedin": "https://www.linkedin.com/in/chiragsinghal"
+}
+```
+
+### Step 3: Implement the Server
+Create `C:\Server\apps\shortener\server.js`. This script reads the JSON file and performs the redirection while logging statistics to SQLite:
+
+```javascript
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+const PORT = 8089;
+const dbPath = path.join(__dirname, 'clicks.db');
+const redirectsFile = path.join(__dirname, 'redirects.json');
+
+// Initialize SQLite Database
+const db = new sqlite3.Database(dbPath);
+db.run(`
+  CREATE TABLE IF NOT EXISTS clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_code TEXT,
+    destination TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_agent TEXT
+  )
+`);
+
+// Read redirects config
+let redirects = {};
+function loadRedirects() {
+    try {
+        const fileContent = fs.readFileSync(redirectsFile, 'utf8');
+        redirects = JSON.parse(fileContent);
+        console.log('Redirects configuration loaded.');
+    } catch (err) {
+        console.error('Failed to load redirects:', err.message);
+    }
+}
+loadRedirects();
+
+// Reload configuration when JSON file is modified
+fs.watchFile(redirectsFile, () => {
+    loadRedirects();
+});
+
+// Handle Redirects
+app.get('/:code', (req, res) => {
+    const code = req.params.code.toLowerCase();
+    const destination = redirects[code];
+
+    if (!destination) {
+        return res.status(404).send('Shortcode not found');
+    }
+
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+
+    // Log click to SQLite database asynchronously
+    db.run(
+        'INSERT INTO clicks (short_code, destination, user_agent) VALUES (?, ?, ?)',
+        [code, destination, userAgent],
+        (err) => {
+            if (err) {
+                console.error('Failed to log click:', err.message);
+            }
+        }
+    );
+
+    // Redirect user (302 Found)
+    res.redirect(302, destination);
+});
+
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`URL Shortener listening on port ${PORT}`);
+});
+```
+
+---
+
+## 3. Configuring Caddy Routing
+
+Open `C:\Server\caddy\Caddyfile` and map a short domain (or subdomain):
+
+```caddy
+lnk.yourdomain.com {
+    reverse_proxy localhost:8089
+}
+```
+
+Restart Caddy:
+
+```powershell
+nssm restart Caddy
+```
+
+---
+
+## 4. Wrapping Shortener in NSSM
+
+Create the service:
+
+```powershell
+nssm install URLShortener node.exe "C:\Server\apps\shortener\server.js"
+nssm set URLShortener AppDirectory "C:\Server\apps\shortener"
+nssm set URLShortener Start SERVICE_AUTO_START
+nssm start URLShortener
+```
+
+### Reviewing Analytics
+To view click analytics, you can connect to your SQLite file (`clicks.db`) using any database browser tool or write a simple script to print summaries:
+
+```powershell
+# Read top redirect codes via SQLite query in PowerShell
+[System.Reflection.Assembly]::LoadWithPartialName("System.Data.SQLite")
+$conn = New-Object System.Data.SQLite.SQLiteConnection("Data Source=C:\Server\apps\shortener\clicks.db;")
+$conn.Open()
+$cmd = $conn.CreateCommand()
+$cmd.CommandText = "SELECT short_code, COUNT(id) as click_count FROM clicks GROUP BY short_code ORDER BY click_count DESC"
+$reader = $cmd.ExecuteReader()
+while ($reader.Read()) {
+    Write-Host "Code: $($reader['short_code']) | Clicks: $($reader['click_count'])"
+}
+$conn.Close()
+```
+
+By hosting this redirector on your home server, you gain complete control over your short links and access logs, bypassing paid link shortener fees for free.
+
+---
+
+*In the next part, we will replace paid email routing and SMTP sending services.*
+
+**[Proceed to Part 18: Replacing Paid Email Forwarding & SMTP (SendGrid, Mailgun) →](/blog/windows-native-home-server/part-1-uninstall-wsl-os-tuning)**

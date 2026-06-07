@@ -1,0 +1,153 @@
+---
+title: "Part 18: Asset Allocation Simulator & Portfolio Tracking Dashboard"
+description: "How to simulate and track your entire multi-asset portfolio (FDs, P2P, SIP, REITs, options) using a free GitHub-hosted HTML dashboard."
+pubDate: 2026-06-07
+tags:
+  - Asset Allocation
+  - Dashboard
+  - Portfolio Tracking
+  - GitHub Pages
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 18
+draft: false
+---
+
+# Part 18: Asset Allocation Simulator & Portfolio Tracking Dashboard
+
+Now that we understand every asset class, we need a **unified dashboard** to:
+1. Track the current value of each investment bucket.
+2. Simulate projected returns under different scenarios.
+3. Visualize the combined portfolio across all categories.
+
+This dashboard will be a **free, static HTML/JS page** hosted on GitHub Pages
+that reads all data from our Turso database.
+
+---
+
+## 1. What the Dashboard Tracks
+
+The dashboard is divided into **six strategy groups**, each with its own chart:
+
+### Group 1: Fixed Income (FD + Savings + P2P)
+- **Data Inputs:** Principal amount, annual interest rate, tenure.
+- **Charts:** Bar chart of monthly interest income per vehicle.
+- **Metrics:** Total fixed income monthly inflow (e.g. ₹2,500/month).
+
+### Group 2: Market-Linked Equity (Index SIP + Dividend Stocks)
+- **Data Inputs:** SIP amount, CAGR assumption (default 12%), portfolio value.
+- **Charts:** Line chart of projected portfolio growth over 5/10/20 years.
+- **Metrics:** Current corpus, projected corpus, total returns.
+
+### Group 3: REITs & Alternative Income
+- **Data Inputs:** REIT units, purchase price, quarterly dividend data.
+- **Charts:** Quarterly dividend income bar chart.
+- **Metrics:** Annualized rental yield on invested capital.
+
+### Group 4: Commodity Hedge (Gold ETF + Silver ETF)
+- **Data Inputs:** ETF units, average buy price, current price (fetched live).
+- **Charts:** Waterfall chart showing unrealized gain/loss.
+- **Metrics:** Portfolio weight of commodities vs total equity.
+
+### Group 5: Options Trading PnL
+- **Data Inputs:** Read from Turso `daily_pnl` table (populated by paper trader bot).
+- **Charts:** Equity curve (total PnL over time), strategy breakdown pie chart.
+- **Metrics:** Win rate, profit factor, max drawdown, total P&L.
+
+### Group 6: MTF Equity Swing
+- **Data Inputs:** Open positions, MTF funded amount, accrued daily interest.
+- **Charts:** Net MTM (mark-to-market) after interest deduction.
+- **Metrics:** Gross return, interest cost drag, net return.
+
+---
+
+## 2. Tech Stack for the Dashboard
+
+| Component | Tool | Cost |
+| :--- | :--- | :--- |
+| **Hosting** | GitHub Pages | Free |
+| **Data Backend** | Turso (HTTP read-only REST API) | Free |
+| **Charts** | Chart.js v4 (CDN) | Free |
+| **Styling** | TailwindCSS (CDN play) | Free |
+| **Data Fetch** | Browser-side `fetch()` to Turso endpoint | Free |
+
+---
+
+## 3. Separate Database Tables for Each Group
+
+We extend the Turso schema to support all asset classes:
+
+```sql
+-- Fixed Income tracker
+CREATE TABLE IF NOT EXISTS fixed_income (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  principal_inr REAL NOT NULL,
+  rate_pa REAL NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT
+);
+
+-- SIP & Mutual Fund tracker
+CREATE TABLE IF NOT EXISTS sip_investments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fund_name TEXT NOT NULL,
+  monthly_sip_inr REAL NOT NULL,
+  start_date TEXT NOT NULL,
+  assumed_cagr REAL DEFAULT 12.0
+);
+
+-- REIT tracker
+CREATE TABLE IF NOT EXISTS reit_holdings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reit_name TEXT NOT NULL,
+  units REAL NOT NULL,
+  avg_buy_price REAL NOT NULL,
+  last_dividend_per_unit REAL
+);
+
+-- Portfolio daily snapshot
+CREATE TABLE IF NOT EXISTS portfolio_snapshot (
+  snapshot_date TEXT PRIMARY KEY,
+  fixed_income_value REAL,
+  sip_value REAL,
+  reit_value REAL,
+  gold_etf_value REAL,
+  options_pnl REAL,
+  mtf_equity_value REAL,
+  total_value REAL
+);
+```
+
+---
+
+## 4. Daily Snapshot GitHub Action
+
+A separate GitHub Actions cron job runs every **market day at 4:00 PM IST**
+to capture a daily portfolio snapshot into the `portfolio_snapshot` table:
+
+```yaml
+name: Daily Portfolio Snapshot
+on:
+  schedule:
+    - cron: '30 10 * * 1-5'  # 4:00 PM IST = 10:30 UTC
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install requests
+      - name: Record daily snapshot
+        env:
+          TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
+          TURSO_DB_TOKEN: ${{ secrets.TURSO_DB_TOKEN }}
+        run: python scripts/snapshot.py
+```
+
+**[Proceed to Part 19: The Sovereign Developer's Income Roadmap →](/blog/wealth-and-options-automation/part-19-sovereign-developer-income-roadmap)**

@@ -1,0 +1,156 @@
+---
+title: "Part 8: Building a Python-Based Option Paper Trading Engine"
+description: "How to construct a reliable, database-backed paper trading simulator in Python to test option strategies without financial risk."
+pubDate: 2026-06-07
+tags:
+  - Python
+  - Paper Trading
+  - GitHub Actions
+  - SQLite
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 8
+draft: false
+---
+
+# Part 8: Building a Python-Based Option Paper Trading Engine
+
+Before deploying real money, you must **paper trade** your strategy. Paper trading
+in options is more complex than stocks because options expire, experience heavy
+theta decay, and suffer from high bid-ask slippage. 
+
+We will build a custom paper trading simulator in Python that runs on a schedule
+via **GitHub Actions** and stores its state in our **Turso** database.
+
+---
+
+## 1. Simulating Slippage and Taxes (Keeping it Realistic)
+
+Many paper trading simulators show unrealistic profits because they assume you fill
+orders exactly at the last traded price (LTP). In the real market:
+1.  **Bid-Ask Spread:** If the LTP of a Nifty call is ₹50, the buying bid might
+    be ₹49.5 and the selling ask might be ₹50.5. If you execute a market buy, you
+    pay ₹50.5.
+2.  **Statutory Taxes:** Every trade incurs STT, exchange fees, and GST.
+
+To keep our paper trading realistic, our engine will apply a **Slippage & Tax Buffer**:
+*   For every simulated entry or exit, we add a **1.0% slippage penalty** to the price.
+*   We deduct a flat **₹60 per trade leg** to simulate GST, STT, and exchange turnover fees.
+
+If your strategy is profitable in our simulator with these penalties, it has a
+high chance of being profitable in live trading.
+
+---
+
+## 2. The Paper Trading Execution Loop
+
+Every 15 minutes during market hours, GitHub Actions triggers our script. The script
+performs the following sequence:
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   EXECUTION RUN LOOP                   │
+├────────────────────────────────────────────────────────┤
+│  1. Read active positions from Turso Edge Database     │
+│  2. Fetch live Option Chain prices from Broker API     │
+│  3. Calculate current mark-to-market (MTM) PnL        │
+│  4. Check individual stop-losses & portfolio stop-loss │
+│  5. If triggered: execute exit & log to trade_logs     │
+│  6. Send Telegram notification with summary            │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Core Engine Script Blueprint
+
+Here is the modular Python structure for our simulator (`src/paper_engine.py`):
+
+```python
+import os
+import requests
+import json
+import uuid
+
+# Load config from env
+TURSO_URL = os.getenv("TURSO_DB_URL")
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    requests.post(url, json=payload)
+
+def get_db_positions():
+    # Fetch active positions from Turso
+    headers = {"Authorization": f"Bearer {TURSO_TOKEN}", "Content-Type": "application/json"}
+    payload = {
+        "requests": [
+            {"type": "execute", "stmt": {"sql": "SELECT * FROM active_positions"}}
+        ]
+    }
+    response = requests.post(f"{TURSO_URL}/v2/pipeline", json=payload, headers=headers)
+    results = response.json()["results"][0]["response"]["result"]
+    
+    positions = []
+    if "rows" in results:
+        for row in results["rows"]:
+            positions.append({
+                "id": row[0]["value"],
+                "symbol": row[1]["value"],
+                "strike": float(row[2]["value"]),
+                "option_type": row[3]["value"],
+                "quantity": int(row[4]["value"]),
+                "entry_price": float(row[5]["value"]),
+                "stop_loss": float(row[6]["value"]) if row[6]["value"] else None
+            })
+    return positions
+
+def check_positions_risk(live_prices):
+    positions = get_db_positions()
+    if not positions:
+        print("No active positions to monitor.")
+        return
+        
+    portfolio_pnl = 0.0
+    exited_legs = []
+    
+    for pos in positions:
+        ltp = live_prices.get(pos["symbol"], pos["entry_price"])
+        
+        # Calculate PnL (Option Selling: profit when price decreases)
+        pnl = (pos["entry_price"] - ltp) * pos["quantity"]
+        portfolio_pnl += pnl
+        
+        # Check Leg Stop Loss
+        if pos["stop_loss"] and ltp >= pos["stop_loss"]:
+            print(f"Stop loss triggered for {pos['symbol']} at {ltp}")
+            exited_legs.append(pos)
+            
+    # If any leg is triggered, exit the entire structure to control risk
+    if exited_legs:
+        exit_portfolio(positions, "STOP_LOSS_TRIGGERED", live_prices)
+    else:
+        print(f"Current Portfolio MTM PnL: ₹{portfolio_pnl:.2f}")
+        send_telegram(f"🤖 *Trading Bot Status*\nPortfolio MTM: `₹{portfolio_pnl:.2f}`")
+
+def exit_portfolio(positions, reason, live_prices):
+    # Place exit orders via API & clear Turso tables
+    for pos in positions:
+        ltp = live_prices.get(pos["symbol"], pos["entry_price"])
+        # Apply 1.0% slippage on exit execution
+        executed_exit_price = ltp * 1.01
+        
+        # Log to trade_logs in Turso...
+        # Clear positions table...
+        
+    send_telegram(f"⚠️ *Portfolio Exited!*\nReason: `{reason}`")
+```
+
+In the next part, we will build the live market data connections and code the full
+option strike selection algorithm.
+
+**[Proceed to Part 9: Coding the Multi-Strategy Automation Bot →](/blog/wealth-and-options-automation/part-09-coding-multi-strategy-bot)**

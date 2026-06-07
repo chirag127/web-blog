@@ -1,0 +1,142 @@
+---
+title: "Part 7: Serverless Database Architecture: Turso Edge"
+description: "How to design a zero-cost persistent state store for your trading bot using Turso edge databases and libSQL."
+pubDate: 2026-06-07
+tags:
+  - Database
+  - Turso
+  - SQLite
+  - SQL
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 7
+draft: false
+---
+
+# Part 7: Serverless Database Architecture: Turso Edge
+
+Because our automated trading script runs on **GitHub Actions**, our execution
+environment is completely ephemeral. When a workflow run finishes, the runner
+is destroyed. If we write positions to a local file, it is lost forever.
+
+To keep track of open positions, entry prices, and trading history, we need a
+persistent database. It must be free, fast, and accessible over HTTP without
+bloated drivers.
+
+Our database of choice is **Turso**.
+
+---
+
+## 1. Turso: The Edge Database for Developers
+
+Turso is a serverless database platform based on libSQL (a fork of SQLite).
+Its free tier (Starter Plan) is incredibly generous:
+*   **Database Limit:** Up to **100 databases** per account.
+*   **Storage:** **5GB** total storage.
+*   **Reads/Writes:** **500 million row reads** and **10 million row writes** per month.
+
+For a developer, having 100 databases means you can spin up a new database for
+every trading strategy (e.g. `stage-condor`, `live-butterfly`, `trade-logs-archive`)
+without hitting limits.
+
+---
+
+## 2. Table Design for Options Trading
+
+We will configure three tables in our Turso database to manage state:
+
+### Table 1: `portfolio_state`
+Tracks overall capital, margin, and daily profit/loss limits.
+```sql
+CREATE TABLE portfolio_state (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    capital_allocated REAL NOT NULL,
+    free_margin REAL NOT NULL,
+    daily_stop_loss REAL NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Table 2: `active_positions`
+Tracks open option legs of active trades. When we enter a 4-leg Iron Condor,
+we insert 4 rows. When we exit, we clear this table.
+```sql
+CREATE TABLE active_positions (
+    id TEXT PRIMARY KEY, -- UUID
+    symbol TEXT NOT NULL,
+    strike REAL NOT NULL,
+    option_type TEXT NOT NULL, -- 'CE' or 'PE'
+    quantity INTEGER NOT NULL,
+    entry_price REAL NOT NULL,
+    stop_loss REAL,
+    target_price REAL,
+    entry_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Table 3: `trade_logs`
+An audit trail of every trade executed for tax, performance, and slippage tracking.
+```sql
+CREATE TABLE trade_logs (
+    id TEXT PRIMARY KEY, -- UUID
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    symbol TEXT NOT NULL,
+    action TEXT NOT NULL, -- 'BUY' or 'SELL'
+    quantity INTEGER NOT NULL,
+    price REAL NOT NULL,
+    execution_reason TEXT NOT NULL, -- 'ENTRY', 'STOP_LOSS_LEG', 'DAILY_SL_EXIT', 'EXPIRY'
+    pnl REAL
+);
+```
+
+---
+
+## 3. Connecting Python via HTTP REST API
+
+Since we want our GitHub Actions runner to boot up in under 5 seconds, we want
+to avoid importing heavy database SDKs. Turso allows you to execute SQL queries
+using standard HTTP `POST` requests.
+
+Here is how you can read and write to your Turso database in Python using the
+built-in `requests` library:
+
+```python
+import os
+import requests
+
+TURSO_DB_URL = os.getenv("TURSO_DB_URL")  # Format: https://<db-name>-<user>.turso.io
+TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
+
+def execute_query(sql_statement, arguments=[]):
+    url = f"{TURSO_DB_URL}/v2/pipeline"
+    headers = {
+        "Authorization": f"Bearer {TURSO_AUTH_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    # Turso Pipeline API payload format
+    payload = {
+        "requests": [
+            {
+                "type": "execute",
+                "stmt": {
+                    "sql": sql_statement,
+                    "args": [{"type": "text" if isinstance(a, str) else "float", "value": str(a)} for a in arguments]
+                }
+            },
+            {"type": "close"}
+        ]
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    return response.json()
+
+# Example Usage
+# execute_query("INSERT INTO portfolio_state (capital_allocated, free_margin, daily_stop_loss) VALUES (?, ?, ?)", [100000.0, 100000.0, 2000.0])
+```
+
+In the next part, we will construct our paper trading engine using this database
+layer.
+
+**[Proceed to Part 8: Building a Python-Based Option Paper Trading Engine →](/blog/wealth-and-options-automation/part-08-python-paper-trading-engine)**

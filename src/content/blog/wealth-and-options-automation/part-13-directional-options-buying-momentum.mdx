@@ -1,0 +1,90 @@
+---
+title: "Part 13: Directional Options Buying & Momentum Strategies"
+description: "Understanding the mathematics of option buying: delta, gamma acceleration, momentum setups on index expiry days, and risk control guidelines."
+pubDate: 2026-06-07
+tags:
+  - Option Buying
+  - Momentum
+  - Intraday Scalping
+  - Expiry Day
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 13
+draft: false
+---
+
+# Part 13: Directional Options Buying & Momentum Strategies
+
+Unlike option selling where time decay (theta) is your friend, **option buying**
+is a race against time. Option buyers have a negative theta decay curve, meaning
+if the market goes sideways, the option value decays to zero. To be profitable
+in options buying, you must master **directional momentum** and trade during
+periods of high volatility.
+
+---
+
+## 1. Option Buying Greek Dynamics
+
+- **Delta (Directional Velocity):** ATM options have a Delta of ~0.50. When Nifty
+  moves by 10 points, your ATM option moves by 5 points.
+- **Gamma (Acceleration):** Gamma is the rate of change of Delta. ATM options
+  have the highest Gamma. On expiry days, Gamma is extremely high, causing small
+  moves in the index to trigger exponential jumps in option premium (e.g. ₹10
+  to ₹80). This is known as "hero-or-zero" trading.
+- **Vega (Volatility Sensitivity):** Option prices rise when Implied Volatility
+  (IV) increases. As an option buyer, you want to buy when IV is low and sell
+  when IV spikes (e.g. before election results, corporate earnings).
+
+---
+
+## 2. Intraday Opening Range Breakout (ORB) on Index Options
+
+A mechanical option buying strategy designed for the opening hour.
+
+- **Setup:** Nifty 50 or Bank Nifty Index.
+- **Timeframe:** 5-minute candles.
+- **Rules:**
+  1. Identify the high and low of the first three 5-minute candles (9:15 AM to 9:30 AM).
+  2. **Long Setup:** If a 5-minute candle closes above the 9:15-9:30 AM high, buy
+     1 lot of ATM Call (CE) option.
+  3. **Short Setup:** If a 5-minute candle closes below the 9:15-9:30 AM low, buy
+     1 lot of ATM Put (PE) option.
+  4. **Stop Loss:** Set SL at the low of the breakout candle or a flat 20% of the
+     option entry price.
+  5. **Exit:** Target a 1:2 R:R (e.g., if you risk ₹10, target ₹20 profit) or square
+     off at 3:10 PM.
+
+---
+
+## 3. Expiry Day Scalping (RSI Crossover + Volume)
+
+India has index expiries every day of the week. This strategy capitalizes on rapid
+swings on expiry days.
+
+- **Setup:** Expiry Index (e.g., Bank Nifty on Wednesdays, Nifty on Thursdays).
+- **Timeframe:** 3-minute candles.
+- **Indicators:** Relative Strength Index (RSI) set to 14 periods.
+- **Execution Rules:**
+  1. Look for RSI crossovers of 40 and 60.
+  2. **Bullish Trigger:** Buy ATM CE when RSI crosses above 60 on a candle with
+     volume higher than the 10-period moving average volume.
+  3. **Bearish Trigger:** Buy ATM PE when RSI crosses below 40 on a volume spike.
+  4. **Stop Loss:** Strict 30% stop-loss from entry. If not hit, options decay
+     quickly; never average a losing buy position.
+  5. **Trailing:** Trail stop-loss to cost once the option moves 20% in your favor.
+
+---
+
+## 4. Option Buying Rules for Capital Preservation
+
+Options buying has a high failure rate because of decay. Retail developers
+must implement strict system guards:
+- **Never hold overnight:** Decay will erode your premiums during market close.
+- **Fixed Position Sizing:** Allocate a maximum of 5% of your total trading capital
+  to any single option buying trade.
+- **No averaging:** If a buy trade goes to loss, do not buy more to lower average cost.
+
+In the next part, we cover futures trading mechanics and Cash-Future arbitrage.
+
+**[Proceed to Part 14: Index Futures & Cash-Future Arbitrage →](/blog/wealth-and-options-automation/part-14-futures-trading-arbitrage-mechanics)**

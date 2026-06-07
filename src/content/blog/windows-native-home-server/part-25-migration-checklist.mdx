@@ -1,0 +1,95 @@
+---
+title: "Windows Home Server — Part 25: The Ultimate Home Server Migration Checklist"
+description: "A step-by-step migration playbook to transition database schemas, API routes, and schedules from cloud VPS platforms to your Windows server."
+pubDate: 2026-06-06
+tags:
+  - Home-Server
+  - Windows
+  - Migration-Playbook
+  - DevOps
+  - Databases
+  - DNS
+  - Self-Hosting
+category: "Engineering"
+author: "Chirag Singhal"
+series: "WSL-Free Windows Home Server"
+part: 25
+draft: false
+---
+
+# Windows Home Server — Part 25: The Ultimate Home Server Migration Checklist
+
+You have configured a secure, high-performance web server, database engine, media transcoder, and continuous deployment pipeline—all running natively on bare-metal Windows. 
+
+The final step is migrating your active projects, databases, and assets off paid VPS platforms (like Heroku, DigitalOcean, or AWS) to your home server. This guide provides a step-by-step migration checklist, detailing how to safely export data, configure DNS records, and verify stability.
+
+---
+
+## 1. Step-by-Step Migration Playbook
+
+Follow these steps sequentially to minimize downtime:
+
+### Phase A: Database Export & Restore
+1. **Put Cloud App in Read-Only Mode**: Stop writes to your cloud database (or temporarily shut down the dynamic web dynos).
+2. **Export Database Schema & Data**:
+   - For PostgreSQL:
+     ```bash
+     pg_dump -h CLOUD_HOST -U USERNAME -d DBNAME -f cloud-export.sql
+     ```
+   - For MySQL/MariaDB:
+     ```bash
+     mysqldump -h CLOUD_HOST -u USERNAME -p DBNAME > cloud-export.sql
+     ```
+3. **Import to Home Server Database**:
+   - For PostgreSQL:
+     ```powershell
+     # Create database locally
+     "C:\Program Files\PostgreSQL\16\bin\createdb.exe" -U postgres -h localhost DBNAME
+     # Import sql
+     "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d DBNAME -f cloud-export.sql
+     ```
+   - For MariaDB:
+     ```powershell
+     mariadb -u root -p DBNAME < cloud-export.sql
+     ```
+
+---
+
+### Phase B: File Asset & Secret Sync
+1. **Sync S3 buckets**: Download files from your paid S3 buckets and upload them to your local MinIO bucket or Cloudflare R2:
+   ```powershell
+   aws s3 sync s3://paid-cloud-bucket s3://local-minio-bucket --endpoint-url http://localhost:9000
+   ```
+2. **Transfer Environment Files**: Copy your environment configurations (`.env`) for each application into their respective `C:\Server\apps\` folders. Double-check database connection strings to ensure they point to `localhost`.
+
+---
+
+### Phase C: Continuous Deployment Hook Setup
+1. **Configure SSH Keys**: Generate local SSH keys on the Windows server and register them on GitHub to allow passwordless git pulls.
+2. **Activate Webhooks**: Register the repository webhook URLs pointing to your local deployment handler (`https://deploy.yourdomain.com/deploy-bot`) as configured in **Part 9**.
+
+---
+
+### Phase D: DNS Cutover
+1. Go to your **Cloudflare Dashboard** → **DNS settings**.
+2. Identify subdomain records (like `api.yourdomain.com` or `dashboard.yourdomain.com`) that previously pointed to VPS IP addresses.
+3. Remove those records.
+4. Route the subdomains to your home server's Cloudflare Tunnel (as set up in **Part 2**):
+   ```powershell
+   # Point subdomains to the tunnel
+   C:\Server\bin\cloudflared.exe --origincert C:\Server\cloudflared\cert.pem tunnel route dns homeserver api.yourdomain.com
+   ```
+
+---
+
+## 2. Server Stability & Maintenance Checklist
+
+To ensure your server runs reliably without manual intervention:
+
+- [ ] **BIOS AC Recovery**: Verify that the BIOS setting "AC Power Recovery" is set to **On** or **Last State**. (Test this by pulling the charger plug from the laptop and plugging it back in; the machine must boot to Windows automatically).
+- [ ] **Lid Close Sleep**: Double-check that lid-close standby actions are set to "Do Nothing" for both AC and battery power profiles.
+- [ ] **Active Hours**: Verify that Windows Update active hours cover your working day to block unexpected reboots.
+- [ ] **Logs Rotation**: Ensure that Caddy, n8n, Uptime Kuma, and other NSSM services have log rotation enabled to prevent disk space exhaustion.
+- [ ] **Telegram Alerts**: Trigger a test alert in your system monitor script to verify notifications are delivered correctly to your phone.
+
+By completing this migration playbook, you transition your workloads to your bare-metal Windows home server, saving hundreds of dollars per year while running a highly responsive, secure, and zero-maintenance local platform.

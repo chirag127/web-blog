@@ -1,0 +1,82 @@
+---
+title: "Part 6: Deep Dive into Managed Platforms: AlgoTest & Tradetron"
+description: "Step-by-step setup guides for deploying no-code options strategies on AlgoTest and Tradetron using free plans."
+pubDate: 2026-06-07
+tags:
+  - AlgoTest
+  - Tradetron
+  - No Code
+  - Staging
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 6
+draft: false
+---
+
+# Part 6: Deep Dive into Managed Platforms: AlgoTest & Tradetron
+
+If you want to validate your options strategy before writing custom code, managed
+no-code platforms are highly effective. Let's look at how to set up an automated
+options strategy (like an Iron Condor or Iron Butterfly) on the two leading
+platforms in India using their free/trial tiers.
+
+---
+
+## 1. AlgoTest: Best for Options Backtesting
+
+AlgoTest is an options-focused platform with a robust backtesting engine and simple
+strategy builder.
+
+### How to Set Up an Iron Condor on AlgoTest:
+1.  **Register:** Create an account. You get 25 free backtest credits every week.
+2.  **Open Strategy Builder:** Choose F&O and select your index (e.g., NIFTY).
+3.  **Add Legs:**
+    *   **Leg 1 (Short Call):** Sell 1 Lot Call, Strike Selection: Delta = 0.15.
+    *   **Leg 2 (Long Call Protection):** Buy 1 Lot Call, Strike Selection: Delta = 0.05.
+    *   **Leg 3 (Short Put):** Sell 1 Lot Put, Strike Selection: Delta = 0.15.
+    *   **Leg 4 (Long Put Protection):** Buy 1 Lot Put, Strike Selection: Delta = 0.05.
+4.  **Set Target / Stop Loss:**
+    *   Set Stop Loss on individual short legs (e.g., 50% increase in premium).
+    *   Set Portfolio Stop Loss (e.g., exit all legs if total loss reaches ₹2,000).
+5.  **Run Backtest:** Click "Start Backtest" to see historical performance over the
+    last 5 years, including win rate, max drawdown, and net returns.
+6.  **Forward Test (Paper Trade):** Deploy the strategy in "Forward Test" mode. It
+    will run virtual trades in real-time during market hours for free.
+
+---
+
+## 2. Tradetron: Best for Marketplace Copying
+
+Tradetron is a highly flexible multi-broker engine that allows you to copy strategies
+or build complex visual condition blocks.
+
+### How to Configure Tradetron for Free:
+1.  **Create Account:** Register on Tradetron.
+2.  **Strategy Creator:** Define your entry and exit blocks using their visual logic
+    editor.
+    *   **Entry Condition:** E.g., `Time >= 0920` and `Net Positions == 0`.
+    *   **Position Block:** Define your 4 legs (buying and selling option contracts).
+    *   **Exit Condition:** E.g., `LTP of Short Leg >= 1.5 * Entry Price` or `Time >= 1515`.
+3.  **Deploy for Free:** Under their **Free Plan**, you can deploy one strategy in
+    **Paper Trading** mode. This will stream live market data and simulate order
+    execution without charges.
+4.  **Broker Integration:** To go live, link your broker (e.g., Kotak Neo or Shoonya)
+    via API. If your broker offers a free API, Tradetron handles the authentication,
+    though you may need to upgrade to a paid Tradetron plan (~₹300/month) to run live
+    executions.
+
+---
+
+## 3. Platform Verdict
+
+*   **Choose AlgoTest** if you want to test and run options-specific structures. The
+    ability to select strikes dynamically by Delta (e.g. 0.15 Delta) makes it superior
+    for systematic sellers.
+*   **Choose Tradetron** if you want to copy existing, verified strategies from other
+    traders or need complex condition blocks (e.g. crossing moving averages).
+
+In the next part, we will pivot back to our self-coded developer stack and design
+our edge database using **Turso**.
+
+**[Proceed to Part 7: Serverless Database Architecture: Turso Edge →](/blog/wealth-and-options-automation/part-07-turso-edge-db-architecture)**

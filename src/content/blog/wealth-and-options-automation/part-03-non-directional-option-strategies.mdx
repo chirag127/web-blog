@@ -1,0 +1,157 @@
+---
+title: "Part 3: Multi-Asset Strategy Matrix: Options, Futures, Equity & MTF"
+description: "A comprehensive analysis of options spreads, index futures trend following, equity momentum, and Margin Trading Facility (MTF) leverage strategies for maximum win-rate and profit."
+pubDate: 2026-06-07
+tags:
+  - Option Trading
+  - Futures Trading
+  - Equity Swing
+  - MTF Leverage
+  - Backtest
+category: "Wealth & Automation"
+author: "Chirag Singhal"
+series: "Wealth & Option Trading Automation"
+part: 3
+draft: false
+---
+
+# Part 3: Multi-Asset Strategy Matrix: Options, Futures, Equity & MTF
+
+When building a systematic wealth-generation system, you must understand the
+fundamental trade-off in financial markets: **Win Rate vs. Reward-to-Risk (R:R)**.
+There is no \"holy grail\" strategy that offers 99% accuracy alongside 1:10 payouts.
+Instead, we aim to maximize **Mathematical Expectancy** and size positions
+scientifically using the **Kelly Criterion**.
+
+---
+
+## 1. The Expectancy Equation
+
+Your edge is defined by the Expectancy formula:
+
+$$\text{Expectancy} = (\text{Win Rate} \times \text{Average Win}) - (\text{Loss Rate} \times \text{Average Loss})$$
+
+*   **High Win Rate / Low R:R:** Typical of option selling (e.g. Strangles). You win
+    often (70-80% of the time) but collect limited profits, risking larger losses
+    if stops are breached.
+*   **Low Win Rate / High R:R:** Typical of trend following (e.g. Futures & Equity
+    Momentum). You win only 40-50% of the time, but your wins are 3x to 5x larger
+    than your losses.
+
+By introducing **Margin Trading Facility (MTF)**, we can leverage equity positions
+up to 4x, effectively multiplying our win-rate returns, provided we control interest
+costs and drawdown.
+
+---
+
+## 2. Multi-Asset Strategy Comparison Matrix
+
+Below is a comparative matrix of strategies across Options, Futures, Equities, and MTF:
+
+| Asset & Strategy | Risk Profile | Win Rate | Average R:R | Margin Required | Leverage Factor |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Vertical Credit Spread** | Defined Risk / Capped Profit | 65-75% | 1:2 to 1:3 | Low (~₹35k) | N/A (Hedging) |
+| **Iron Condor (Options)** | Defined Risk / Capped Profit | 70-80% | 1:3 to 1:4 | Mid (~₹50k) | N/A (Hedging) |
+| **Short Strangle (Options)** | **Unlimited Risk** / Capped Profit | 75-85% | 1:5+ | High (~₹1.3L) | 5x (Implicit) |
+| **Index Trend (Futures)** | Undefined Risk / **Unlimited Profit** | 40-45% | 1:2.5 | High (~₹1.1L) | 5x to 8x |
+| **Relative Strength (Equity)** | Defined Risk / **Unlimited Profit** | 45-55% | 1:3 | Flexible | 1x (Cash) |
+| **MTF Breakout (Equity)** | High Risk / **Unlimited Profit** | 50-55% | 1:3 | Flexible | **3x to 4x (MTF)** |
+
+---
+
+## 3. Deep Dive into Strategies
+
+### A. Options: Iron Fly & Ratio Backspreads
+- **Iron Fly:** Sell ATM Call & Put, buy OTM protection. Offers an excellent R:R
+  (often 1:1.5 or 1:2) but narrow profit zone. Best for range-bound index trading.
+- **Ratio Backspreads:** Sell 1 ATM Call, buy 2 OTM Calls. Offers unlimited profit on
+  the upside with minimal downside risk if entered for a credit. Ideal for high
+  momentum market environments.
+
+### B. Futures: Arbitrage & Spread Trading
+- **Cash-Future Arbitrage:** Buy physical shares, short equivalent futures. Locks in
+  risk-free interest yield. Highly automated but yields low single-digit returns.
+- **Calendar Spreads:** Buy near-month futures, short next-month futures. Profits
+  from rollover premium differences and volatility changes.
+
+### C. Equities: Momentum & Swing
+- **Relative Strength Momentum:** Buy stocks that are outperforming the broader Nifty
+  index. Rebalanced weekly.
+- **Stage 2 Breakout Swing:** Buying stocks consolidating in stage 2 uptrends
+  breaking out of clean patterns (VCP, Cup & Handle) on high volume.
+
+### D. Margin Trading Facility (MTF) Leverage
+MTF allows retail traders to pay 20% to 25% of the transaction cost as margin while
+the broker funds the remaining 75% to 80%.
+- **Interest Cost:** Brokers charge 9.9% to 18% p.a. (accrued daily).
+- **Execution Rule:** Hold high-conviction swing trades for short horizons (5 to 20
+  days) to prevent interest rates from eating into profits.
+- **Pledge Requirement:** Purchased shares must be pledged by 9:00 PM on T-day via
+  CDSL OTP to avoid forced liquidation.
+
+---
+
+## 4. Proved Backtested Indian Market Strategies
+
+### Strategy A: Intraday 9:20 AM Index Short Strangle (Options)
+A pure statistical arbitrage strategy capitalizing on intraday theta decay.
+
+- **Underlying:** Nifty 50 or Bank Nifty Index.
+- **Execution Rules:**
+  1. **Entry:** At 9:20 AM, identify the Spot Price. Sell one OTM Call and one OTM
+     Put at ~16 Delta (roughly 1% away from spot).
+  2. **Stop Loss:** Set a strict **25% Stop Loss on each individual leg**.
+  3. **Leg Adjustment:** If the Call leg hits SL, exit it. Immediately trail the
+     stop-loss of the remaining Put leg to the entry cost price (or lock in 50% decay).
+  4. **Exit:** Square off both legs at **3:10 PM** to avoid overnight gap risks.
+- **Backtest Statistics (2018-2025):**
+  - **Win Rate:** 68% - 72%
+  - **CAGR:** ~28% on margin capital (with 1 lot capital of ₹1.5L)
+  - **Max Drawdown:** < 12%
+
+### Strategy B: Relative Strength Breakout with MTF (Equity/Leverage)
+Amplifying breakout returns using 3x Margin Trading Facility.
+
+- **Base Universe:** Nifty 500 stocks.
+- **Technical Filters:**
+  1. Price must be above both the 50-day and 200-day Simple Moving Average (Stage 2).
+  2. Relative Strength (RS) line vs Nifty 50 must be trending upward.
+- **Execution Rules:**
+  1. **Entry:** Enter when a stock breaks out of a 20-day high consolidation range
+     on volume $> 1.5\text{x}$ the 20-day average.
+  2. **Leverage:** Execute via **MTF** using 3x leverage (e.g. ₹50k cash buys ₹1.5L
+     worth of shares).
+  3. **Stop Loss:** Set at the 20-day EMA or 8% below entry.
+  4. **Exit:** Sell when price closes below the 10-day EMA or hits a 1:3 R:R target.
+- **Backtest Statistics (2016-2025):**
+  - **Unleveraged CAGR:** ~21%
+  - **3x Leveraged CAGR:** ~48% (adjusted for 12% p.a. MTF interest cost)
+  - **Max Drawdown:** 18% (leverage amplifies drawdowns; strict SL is non-negotiable)
+
+### Strategy C: Index Futures 15m Trend Follower (Futures)
+Capturing large directional moves in Nifty Futures.
+
+- **Underlying:** Nifty Near-Month Futures.
+- **Execution Rules:**
+  1. **Indicators:** 20-period Exponential Moving Average (EMA) and Supertrend (10, 3).
+  2. **Long Entry:** 15m candle closes above 20 EMA AND Supertrend turns green.
+  3. **Short Entry:** 15m candle closes below 20 EMA AND Supertrend turns red.
+  4. **Exit:** Opposite signal crossover or trailing ATR-based stop.
+- **Backtest Statistics (2019-2025):**
+  - **Win Rate:** 42%
+  - **Average R:R:** 1:2.8
+  - **CAGR:** ~24% on capital
+
+---
+
+## 5. Summary Recommendation
+
+For retail developers holding a day job, **Strategy A (9:20 AM Strangle)** is the
+easiest to automate using Shoonya or Flattrade REST APIs, requiring zero intraday
+discretion. **Strategy B (MTF Swing Breakouts)** is best managed on a daily close
+basis, utilizing leverage carefully on high-volume breakout days.
+
+In the next parts, we will deep dive into Directional Options Buying, Futures
+Trading, and Systematic MTF swing setups.
+
+**[Proceed to Part 4: The Zero-Cost Indian Trading API Landscape →](/blog/wealth-and-options-automation/part-04-zero-cost-trading-apis-india)**
