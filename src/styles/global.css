@@ -2,9 +2,11 @@
 @import '@chirag127/oriz-ui/styles';
 @import '@chirag127/oriz-ui/components.css';
 
-/* Site-specific overrides for the blog — minimal. The bulk of the design
-   system (themes, accents, container utilities, prose) comes from
-   @chirag127/oriz-ui above. */
+/*
+ * Site-specific overrides for the blog. The bulk of the design system
+ * (themes, accents, container utilities, prose) comes from
+ * @chirag127/oriz-ui above.
+ */
 
 /* Skip-link helper used by BaseLayout. */
 .skip-link {
@@ -18,3 +20,61 @@
   border-radius: 0 0 0.5rem 0;
 }
 .skip-link:focus { left: 0; }
+
+/* ---------- KaTeX overrides ----------
+ * The vendored KaTeX stylesheet uses its own base font sizing; nudge it to
+ * sit nicely within the prose scale.
+ */
+.katex { font-size: 1.05em; }
+.katex-display {
+  margin-block: 1.25rem;
+  padding: 0.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.katex-display::-webkit-scrollbar { height: 6px; }
+.katex-display::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-fg-muted) 30%, transparent);
+  border-radius: 3px;
+}
+.prose-oriz .katex { color: inherit; }
+
+/* ---------- Pagefind UI dark-theme polish ---------- */
+[data-theme='dark'] .pagefind-ui,
+[data-theme='hc'] .pagefind-ui {
+  --pagefind-ui-text: var(--color-fg);
+  --pagefind-ui-background: var(--color-bg-soft);
+  --pagefind-ui-border: var(--color-border);
+  --pagefind-ui-tag: var(--color-bg-muted);
+}
+.pagefind-ui__result-link { color: var(--color-fg) !important; }
+.pagefind-ui__result-excerpt mark {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: inherit;
+  padding: 0 0.125rem;
+  border-radius: 0.125rem;
+}
+
+/* ---------- expressive-code shell ---------- */
+.expressive-code { margin-block: 1.25rem; }
+.expressive-code .frame { background: var(--color-bg-soft); }
+
+/* ---------- view-transitions ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 220ms;
+  }
+}
+
+/* ---------- generic helpers used by listing pages ---------- */
+.container-page {
+  max-width: var(--container-page, 1200px);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+.container-prose {
+  max-width: var(--container-prose, 720px);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 1.25rem);
+}

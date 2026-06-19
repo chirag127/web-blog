@@ -2,19 +2,26 @@
 import { getCollection } from 'astro:content'
 import BaseLayout from '~/layouts/BaseLayout.astro'
 import PostCard from '~/components/blog/PostCard.astro'
+import { getPostCategories, slugifyTag } from '~/lib/blog'
 
 export async function getStaticPaths() {
   const allPosts = await getCollection('blog', ({ data }) => !data.draft)
-  const uniqueCategories = [...new Set(allPosts.map((post) => post.data.category))]
-
-  return uniqueCategories.map((category) => ({
-    params: {
-      category: category.toLowerCase().replace(/[\s/]+/g, '-'),
-    },
-    props: {
-      category,
-      posts: allPosts.filter((p) => p.data.category === category),
-    },
+  const byCat = new Map<string, { label: string; posts: typeof allPosts }>()
+  for (const post of allPosts) {
+    for (const cat of getPostCategories(post)) {
+      const slug = slugifyTag(cat)
+      if (!slug) continue
+      const existing = byCat.get(slug)
+      if (existing) {
+        if (!existing.posts.includes(post)) existing.posts.push(post)
+      } else {
+        byCat.set(slug, { label: cat, posts: [post] })
+      }
+    }
+  }
+  return [...byCat.entries()].map(([slug, { label, posts }]) => ({
+    params: { category: slug },
+    props: { category: label, posts },
   }))
 }
 

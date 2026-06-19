@@ -33,6 +33,11 @@ export interface BlogConfig {
   }
 }
 
+const env = (key: string, fallback = ''): string => {
+  // Astro inlines PUBLIC_* env vars at build time.
+  return (import.meta.env[key] as string | undefined) ?? fallback
+}
+
 export const SITE_CONFIG: BlogConfig = {
   title: 'Blog — oriz',
   description:
@@ -51,10 +56,10 @@ export const SITE_CONFIG: BlogConfig = {
     email: 'whyiswhen@gmail.com',
   },
   giscus: {
-    repo: 'chirag127/oriz-blog',
-    repoId: '',
-    category: 'General',
-    categoryId: '',
+    repo: (env('PUBLIC_GISCUS_REPO', 'chirag127/oriz-blog') as `${string}/${string}`),
+    repoId: env('PUBLIC_GISCUS_REPO_ID'),
+    category: env('PUBLIC_GISCUS_CATEGORY', 'General'),
+    categoryId: env('PUBLIC_GISCUS_CATEGORY_ID'),
     mapping: 'pathname',
     reactionsEnabled: true,
     inputPosition: 'bottom',

@@ -1,9 +1,11 @@
 ---
 import '~/styles/global.css'
+import 'katex/dist/katex.min.css'
 import preflight from '~/lib/preflight.js?raw'
 import Header from '~/components/Header.astro'
 import Footer from '~/components/Footer.astro'
 import SiteSidebar from '~/components/SiteSidebar.astro'
+import { ClientRouter } from 'astro:transitions'
 
 interface Props {
   title?: string
@@ -67,6 +69,8 @@ const ogImage = image ? new URL(image, 'https://blog.oriz.in').toString() : unde
     <meta name="twitter:site" content="@chirag127" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0a0a0b" />
     <link rel="alternate" type="application/rss+xml" title="Blog RSS Feed" href="/rss.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -76,6 +80,9 @@ const ogImage = image ? new URL(image, 'https://blog.oriz.in').toString() : unde
     />
 
     <script is:inline set:html={preflight} />
+
+    <!-- View Transitions: smooth client-side navigation between posts. -->
+    <ClientRouter />
 
     {jsonLd && (
       <script
@@ -120,6 +127,15 @@ const ogImage = image ? new URL(image, 'https://blog.oriz.in').toString() : unde
       <main id="main" class="page-main"><slot /></main>
     </div>
     <Footer />
+
+    <!-- Service worker registered after first paint. Skipped on dev (`?dev`). -->
+    <script>
+      if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {})
+        })
+      }
+    </script>
 
     <style is:global>
       .page-shell {

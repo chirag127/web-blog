@@ -1,19 +1,9 @@
 ---
-import { getCollection } from 'astro:content'
 import BaseLayout from '~/layouts/BaseLayout.astro'
+import { getCategoriesWithCounts, getPublishedPosts, slugifyTag } from '~/lib/blog'
 
-const allPosts = await getCollection('blog', ({ data }) => !data.draft)
-const categoryMap = new Map<string, number>()
-
-for (const post of allPosts) {
-  categoryMap.set(post.data.category, (categoryMap.get(post.data.category) || 0) + 1)
-}
-
-const sortedCategories = [...categoryMap.entries()].sort((a, b) => b[1] - a[1])
-
-function slugifyTag(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-}
+const allPosts = await getPublishedPosts()
+const sortedCategories = await getCategoriesWithCounts()
 ---
 
 <BaseLayout title="Categories — Blog" description="Browse blog posts by category.">
@@ -24,10 +14,10 @@ function slugifyTag(value: string): string {
     </header>
 
     <ul class="cat-grid">
-      {sortedCategories.map(([cat, count]) => (
+      {sortedCategories.map(({ category, count }) => (
         <li>
-          <a class="cat-card" href={`/categories/${slugifyTag(cat)}/`}>
-            <span class="cat-name">{cat}</span>
+          <a class="cat-card" href={`/categories/${slugifyTag(category)}/`}>
+            <span class="cat-name">{category}</span>
             <span class="cat-count">{count}</span>
           </a>
         </li>

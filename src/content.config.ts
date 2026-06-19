@@ -1,3 +1,19 @@
+/**
+ * Content collections — strict schema for the `blog` collection.
+ *
+ * Canonical fields used by every route + component:
+ *   title, description, pubDate                  required
+ *   updatedDate, heroImage, tags, category       typed
+ *   categories                                   array fallback (legacy)
+ *   draft, author, series, part                  typed
+ *   canonical                                    URL
+ *   readingTime                                  auto-computed if absent
+ *
+ * The 20 book-summary posts ported from open-ncert ship a few extra fields
+ * (slug, authorBio, seriesOrder, coverImage, coverImageAlt, platforms,
+ * schema, keywords, showAds). The schema lists those as optional
+ * passthroughs so they validate without hand-editing.
+ */
 import { defineCollection } from 'astro:content'
 import { glob } from 'astro/loaders'
 import { z } from 'astro/zod'
@@ -5,19 +21,37 @@ import { z } from 'astro/zod'
 const blog = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/blog' }),
   schema: z.object({
+    // Required
     title: z.string(),
     description: z.string(),
     pubDate: z.coerce.date(),
+
+    // Strongly typed optionals
     updatedDate: z.coerce.date().optional(),
     heroImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
     category: z.string().default('General'),
+    /** Some posts emit plural `categories` instead of singular. Either is fine. */
+    categories: z.array(z.string()).optional(),
     draft: z.boolean().default(false),
     author: z.string().default('Chirag Singhal'),
     series: z.string().optional(),
     part: z.union([z.string(), z.number()]).optional(),
+    /** Auto-computed at render-time if absent. */
     readingTime: z.string().optional(),
     canonical: z.string().url().optional(),
+    featured: z.boolean().optional(),
+
+    // Legacy passthroughs (book-summary collection ported from open-ncert)
+    slug: z.string().optional(),
+    authorBio: z.string().optional(),
+    seriesOrder: z.union([z.number(), z.string()]).optional(),
+    coverImage: z.string().optional(),
+    coverImageAlt: z.string().optional(),
+    platforms: z.array(z.string()).optional(),
+    schema: z.unknown().optional(),
+    keywords: z.array(z.string()).optional(),
+    showAds: z.boolean().optional(),
   }),
 })
 

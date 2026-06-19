@@ -1,124 +1,35 @@
 ---
+/**
+ * /bookmarks — all the posts the current user has saved.
+ * Uses the React BookmarksList island so live Firestore updates flow
+ * straight in. Anon users see localStorage entries.
+ */
 import BaseLayout from '~/layouts/BaseLayout.astro'
+import BookmarksList from '~/components/blog/BookmarksList.tsx'
 ---
 
 <BaseLayout
   title="Bookmarks — Blog"
-  description="Your saved blog posts."
+  description="Posts you've saved from this blog."
   noindex={true}
+  hideSidebar={true}
 >
   <section class="page">
     <header class="page-head">
       <h1>Bookmarks</h1>
-      <p class="lede">Posts you've saved from this blog. Stored in your browser only.</p>
+      <p class="lede">
+        Your saved posts. Sign in to sync across devices, or stay anonymous and
+        we'll keep them in this browser only.
+      </p>
     </header>
 
-    <div id="bookmarks-container">
-      <div id="bookmarks-empty" class="card empty" hidden>
-        <p class="empty-h">No bookmarks yet.</p>
-        <p class="empty-d">Bookmark posts from the blog to save them here for later.</p>
-        <a href="/blog/" class="btn">Browse posts →</a>
-      </div>
-      <ul id="bookmarks-list" class="post-grid" hidden></ul>
-    </div>
+    <BookmarksList client:load />
   </section>
 </BaseLayout>
 
-<template id="bookmark-template">
-  <li>
-    <a class="bookmark-card" href="">
-      <h3 class="bm-title"></h3>
-      <p class="bm-desc"></p>
-      <time class="bm-date"></time>
-    </a>
-  </li>
-</template>
-
-<script>
-  /**
-   * Reads `oriz:blog:bookmarks` from localStorage. The shape is an array of
-   * { url, title, description, savedAt } added by post pages elsewhere.
-   * Until that lands, this gracefully shows the empty state.
-   */
-  type Bookmark = { url: string; title: string; description?: string; savedAt: string }
-
-  const KEY = 'oriz:blog:bookmarks'
-  const empty = document.getElementById('bookmarks-empty') as HTMLElement | null
-  const list = document.getElementById('bookmarks-list') as HTMLUListElement | null
-  const tpl = document.getElementById('bookmark-template') as HTMLTemplateElement | null
-
-  let items: Bookmark[] = []
-  try {
-    items = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Bookmark[]
-  } catch {
-    items = []
-  }
-
-  if (!items.length || !list || !tpl || !empty) {
-    if (empty) empty.hidden = false
-  } else {
-    empty.hidden = true
-    list.hidden = false
-    for (const it of items) {
-      const node = tpl.content.firstElementChild?.cloneNode(true) as HTMLLIElement | null
-      if (!node) continue
-      const a = node.querySelector('a')
-      const t = node.querySelector('.bm-title')
-      const d = node.querySelector('.bm-desc')
-      const dt = node.querySelector('.bm-date') as HTMLTimeElement | null
-      if (a) a.href = it.url
-      if (t) t.textContent = it.title
-      if (d) d.textContent = it.description ?? ''
-      if (dt) {
-        dt.dateTime = it.savedAt
-        dt.textContent = new Date(it.savedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-      }
-      list.appendChild(node)
-    }
-  }
-</script>
-
 <style>
-  .page { padding-block: 2.5rem 4rem; }
+  .page { padding-block: 2.5rem 4rem; max-width: var(--container-page, 1200px); margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2rem); }
   .page-head { margin-bottom: 1.5rem; }
   h1 { font-family: var(--font-serif); font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
   .lede { color: var(--color-fg-muted); margin: 0.5rem 0 0; max-width: 60ch; }
-  .card.empty {
-    padding: 3rem 1.5rem;
-    text-align: center;
-    background: var(--color-bg-soft);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-  }
-  .empty-h { font-weight: 600; margin: 0 0 0.25rem; }
-  .empty-d { color: var(--color-fg-muted); margin: 0 0 1.25rem; font-size: 0.9375rem; }
-  .btn {
-    display: inline-flex; align-items: center; gap: 0.5rem;
-    height: 40px; padding-inline: 1.125rem;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-button);
-    color: var(--color-fg);
-    font-weight: 500;
-    text-decoration: none;
-  }
-  .btn:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
-  .post-grid {
-    list-style: none; padding: 0; margin: 0;
-    display: grid; gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  }
-  .bookmark-card {
-    display: grid; gap: 0.5rem;
-    padding: 1.125rem;
-    background: var(--color-bg-soft);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    color: var(--color-fg);
-    text-decoration: none;
-  }
-  .bookmark-card:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
-  .bm-title { margin: 0; font-size: 1rem; font-weight: 600; }
-  .bm-desc { margin: 0; color: var(--color-fg-muted); font-size: 0.9375rem; }
-  .bm-date { color: var(--color-fg-soft); font-size: 0.8125rem; }
 </style>

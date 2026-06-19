@@ -1,0 +1,83 @@
+---
+/**
+ * /search — dedicated full-page Pagefind search.
+ * The same overlay sheet is reachable via ⌘K / "/" in the header, but
+ * this page keeps the search state in the URL (Pagefind reads ?q=…).
+ */
+import BaseLayout from '~/layouts/BaseLayout.astro'
+---
+
+<BaseLayout title="Search — Blog" description="Search every post on the blog." hideSidebar={true}>
+  <div class="page">
+    <header class="page-head">
+      <h1>Search</h1>
+      <p class="lede">Search the entire blog corpus — posts, code, math, frontmatter.</p>
+      <p class="hint">
+        Tip: press <kbd>⌘K</kbd> or <kbd>/</kbd> from any page to open the quick search.
+      </p>
+    </header>
+
+    <div id="search" class="search-mount" data-pagefind-ui></div>
+  </div>
+
+  <script>
+    const mount = document.getElementById('search')
+    if (mount) {
+      void (async () => {
+        try {
+          // @ts-expect-error — pagefind UI runtime
+          const { PagefindUI } = await import('@pagefind/default-ui')
+          // @ts-expect-error — pagefind UI css module
+          await import('@pagefind/default-ui/css/ui.css')
+          new PagefindUI({
+            element: mount,
+            showImages: false,
+            showSubResults: true,
+            resetStyles: false,
+            autofocus: true,
+            translations: {
+              placeholder: 'Search posts…',
+              zero_results: 'No matches for "[SEARCH_TERM]". Try fewer or different words.',
+            },
+          })
+        } catch (e) {
+          mount.innerHTML =
+            '<p class="muted">Search isn\'t available yet. Run <code>pnpm build</code> to generate the index.</p>'
+          console.error(e)
+        }
+      })()
+    }
+  </script>
+</BaseLayout>
+
+<style>
+  .page { padding-block: 2.5rem 4rem; }
+  .page-head { margin-bottom: 1.5rem; }
+  h1 { font-family: var(--font-serif); font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .lede { color: var(--color-fg-muted); margin: 0.5rem 0 0.25rem; max-width: 60ch; }
+  .hint { color: var(--color-fg-soft); font-size: 0.875rem; margin: 0; }
+  kbd {
+    padding: 0.125rem 0.375rem;
+    background: var(--color-bg-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+  .search-mount {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--color-bg-soft);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    --pagefind-ui-primary: var(--color-accent);
+    --pagefind-ui-text: var(--color-fg);
+    --pagefind-ui-background: var(--color-bg-soft);
+    --pagefind-ui-border: var(--color-border);
+    --pagefind-ui-tag: var(--color-bg-muted);
+    --pagefind-ui-border-radius: var(--radius-button);
+    --pagefind-ui-image-border-radius: var(--radius-button);
+    --pagefind-ui-font: inherit;
+  }
+  .muted { color: var(--color-fg-muted); }
+</style>

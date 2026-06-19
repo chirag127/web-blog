@@ -1,104 +1,96 @@
 ---
+/**
+ * /  — blog homepage.
+ *
+ * Layout:
+ *   1. Hero — eyebrow / title / lede / CTAs.
+ *   2. Featured (frontmatter `featured: true`, falls back to most recent).
+ *   3. Latest posts (12).
+ *   4. By category — top 4 categories, latest 3 posts each.
+ *   5. Browse series + browse tag cloud.
+ */
 import BaseLayout from '~/layouts/BaseLayout.astro'
-import { getCollection } from 'astro:content'
+import PostCard from '~/components/blog/PostCard.astro'
+import {
+  getCategoriesWithCounts,
+  getFeaturedPosts,
+  getPublishedPosts,
+  getSeriesWithCounts,
+  getTagsWithCounts,
+  formatPostDate,
+  slugifyTag,
+} from '~/lib/blog'
+import { SITE_CONFIG } from '~/lib/config'
 
-const allPosts = await getCollection('blog', ({ data }) => !data.draft)
-const sortedPosts = allPosts.sort(
-  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+const allPosts = await getPublishedPosts()
+const latestPosts = allPosts.slice(0, 12)
+
+const featuredRaw = await getFeaturedPosts(3)
+const featured = featuredRaw.length > 0 ? featuredRaw : allPosts.slice(0, 3)
+
+const cats = (await getCategoriesWithCounts()).slice(0, 4)
+const latestByCat = await Promise.all(
+  cats.map(async ({ category, count }) => ({
+    category,
+    count,
+    posts: allPosts.filter((p) => p.data.category === category).slice(0, 3),
+  })),
 )
-const latestPosts = sortedPosts.slice(0, 6)
-const allTags = [...new Set(allPosts.flatMap((p) => p.data.tags))].slice(0, 14)
 
-const folderMap = new Map<string, typeof allPosts>()
-for (const post of allPosts) {
-  const slashIdx = post.id.indexOf('/')
-  if (slashIdx === -1) continue
-  const folder = post.id.substring(0, slashIdx)
-  const arr = folderMap.get(folder) ?? []
-  arr.push(post)
-  folderMap.set(folder, arr)
-}
-const seriesPreview = [...folderMap.entries()].slice(0, 3).map(([folder, posts]) => {
-  const indexPost = posts.find((p) => p.id === `${folder}/index`)
-  const rep = indexPost ?? posts[0]
-  return {
-    slug: folder,
-    title: rep.data.title,
-    description: rep.data.description,
-    postCount: posts.length,
-  }
-})
+const seriesAll = (await getSeriesWithCounts()).slice(0, 6)
+const tagCloud = (await getTagsWithCounts()).slice(0, 18)
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Blog',
-  name: 'Blog — oriz',
-  url: 'https://blog.oriz.in/',
-  description: 'Long-form writing on engineering, finance, and books — by Chirag Singhal.',
-  author: { '@type': 'Person', name: 'Chirag Singhal', url: 'https://oriz.in/about/' },
-}
-
-function slugifyTag(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-}
-
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  name: SITE_CONFIG.title,
+  url: SITE_CONFIG.url + '/',
+  description: SITE_CONFIG.description,
+  author: { '@type': 'Person', name: SITE_CONFIG.author.name, url: SITE_CONFIG.author.url },
 }
 ---
 
 <BaseLayout
   title="Blog — oriz"
-  description="Long-form writing on engineering, finance, and books — by Chirag Singhal."
+  description={SITE_CONFIG.description}
   jsonLd={jsonLd}
 >
   <section class="hero">
-    <p class="eyebrow">✍️ <span>The oriz blog</span></p>
-    <h1 class="hero-h">Long-form writing on engineering, finance, and books.</h1>
+    <p class="eyebrow">
+      <span class="eyebrow-dot" aria-hidden="true"></span>
+      The oriz blog · {allPosts.length} posts
+    </p>
+    <h1 class="hero-h" transition:name="page-title">
+      Long-form writing on engineering, finance, and books.
+    </h1>
     <p class="hero-lede">
-      {allPosts.length} posts so far. Software, AI agents, finance tooling,
-      books — and the things I build at <a href="https://oriz.in">oriz.in</a>.
+      Software, AI agents, finance tooling, books — and the things I build at
+      <a href="https://oriz.in">oriz.in</a>.
     </p>
     <div class="hero-cta">
       <a href="/blog/" class="btn btn-primary">Read all posts →</a>
-      <a href="/about/" class="btn">About</a>
+      <a href="/series/" class="btn">Browse series</a>
+      <a href="/rss.xml" class="btn btn-ghost">RSS</a>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <h2 class="section-h">Latest posts</h2>
-      <a class="section-link" href="/blog/">All posts →</a>
-    </div>
-    <ul class="post-grid">
-      {latestPosts.map((post) => (
-        <li>
-          <a class="post-card" href={`/blog/${post.id}`}>
-            <span class="post-cat">{post.data.category}</span>
-            <h3 class="post-title">{post.data.title}</h3>
-            <p class="post-desc">{post.data.description}</p>
-            <time class="post-date" datetime={post.data.pubDate.toISOString()}>
-              {fmtDate(post.data.pubDate)}
-            </time>
-          </a>
-        </li>
-      ))}
-    </ul>
-  </section>
-
-  {seriesPreview.length > 0 && (
+  {featured.length > 0 && (
     <section class="section">
       <div class="section-head">
-        <h2 class="section-h">Browse series</h2>
-        <a class="section-link" href="/series/">All series →</a>
+        <h2 class="section-h">Featured</h2>
       </div>
-      <ul class="series-grid">
-        {seriesPreview.map((s) => (
-          <li>
-            <a class="series-card" href={`/series/${s.slug}`}>
-              <h3>{s.title}</h3>
-              <p>{s.description}</p>
-              <span class="series-meta">{s.postCount} posts</span>
+      <ul class="featured-grid">
+        {featured.map((p, i) => (
+          <li class={`f f-${i}`}>
+            <a class="feat-card" href={`/blog/${p.id}`}>
+              <span class="feat-cat">{p.data.category}</span>
+              <h3 class="feat-title">{p.data.title}</h3>
+              <p class="feat-desc">{p.data.description}</p>
+              <span class="feat-meta">
+                <time datetime={p.data.pubDate.toISOString()}>{formatPostDate(p.data.pubDate)}</time>
+                <span aria-hidden="true">·</span>
+                <span>by {p.data.author}</span>
+              </span>
             </a>
           </li>
         ))}
@@ -106,12 +98,82 @@ function fmtDate(d: Date): string {
     </section>
   )}
 
-  {allTags.length > 0 && (
+  <section class="section">
+    <div class="section-head">
+      <h2 class="section-h">Latest</h2>
+      <a class="section-link" href="/blog/">All posts →</a>
+    </div>
+    <ul class="post-grid">
+      {latestPosts.map((p) => (
+        <li><PostCard post={p} /></li>
+      ))}
+    </ul>
+  </section>
+
+  {latestByCat.length > 0 && (
     <section class="section">
-      <h2 class="section-h">Browse by tag</h2>
+      <div class="section-head">
+        <h2 class="section-h">By category</h2>
+        <a class="section-link" href="/categories/">All categories →</a>
+      </div>
+      <div class="cat-grid">
+        {latestByCat.map(({ category, count, posts }) => (
+          <article class="cat-block">
+            <header class="cat-block-head">
+              <a href={`/categories/${slugifyTag(category)}/`}>
+                <h3>{category}</h3>
+                <span>{count} posts</span>
+              </a>
+            </header>
+            <ul>
+              {posts.map((p) => (
+                <li>
+                  <a href={`/blog/${p.id}`}>
+                    <span class="cat-block-title">{p.data.title}</span>
+                    <time datetime={p.data.pubDate.toISOString()}>{formatPostDate(p.data.pubDate)}</time>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+
+  {seriesAll.length > 0 && (
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-h">Series</h2>
+        <a class="section-link" href="/series/">All series →</a>
+      </div>
+      <ul class="series-row">
+        {seriesAll.map((s) => (
+          <li>
+            <a href={`/series/${slugifyTag(s.series)}/`} class="series-pill">
+              <span class="series-pill-name">{s.series}</span>
+              <span class="series-pill-count">{s.count} parts</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {tagCloud.length > 0 && (
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-h">Tags</h2>
+        <a class="section-link" href="/tags/">All tags →</a>
+      </div>
       <ul class="tag-cloud">
-        {allTags.map((t) => (
-          <li><a href={`/tags/${slugifyTag(t)}/`} class="tag-chip">#{t}</a></li>
+        {tagCloud.map(({ tag, count }) => (
+          <li>
+            <a href={`/tags/${slugifyTag(tag)}/`} class="tag-chip">
+              #{tag}
+              <span class="tag-chip-count">{count}</span>
+            </a>
+          </li>
         ))}
       </ul>
     </section>
@@ -119,11 +181,10 @@ function fmtDate(d: Date): string {
 </BaseLayout>
 
 <style>
-  .hero { padding-block: 4rem 2rem; }
+  /* ---------- hero ---------- */
+  .hero { padding-block: 4.5rem 2rem; }
   .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+    display: inline-flex; align-items: center; gap: 0.5rem;
     padding: 0.25rem 0.75rem;
     border-radius: 999px;
     background: var(--color-bg-soft);
@@ -132,12 +193,17 @@ function fmtDate(d: Date): string {
     font-size: 0.75rem;
     margin: 0 0 1.25rem;
   }
+  .eyebrow-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 25%, transparent);
+  }
   .hero-h {
     font-family: var(--font-serif);
-    font-size: clamp(2rem, 5vw, 3rem);
+    font-size: clamp(2rem, 5.5vw, 3.5rem);
     font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.15;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
     margin: 0 0 1rem;
     max-width: 22ch;
   }
@@ -158,11 +224,14 @@ function fmtDate(d: Date): string {
     color: var(--color-fg);
     font-weight: 500;
     text-decoration: none;
+    font-family: inherit;
   }
-  .btn:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); color: var(--color-fg); }
+  .btn:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
   .btn-primary { background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent); }
   .btn-primary:hover { color: var(--color-accent-fg); }
+  .btn-ghost { background: transparent; }
 
+  /* ---------- section ---------- */
   .section { padding-block: 2.5rem; border-top: 1px solid var(--color-border); }
   .section:first-of-type { border-top: 0; }
   .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.25rem; gap: 1rem; }
@@ -175,14 +244,19 @@ function fmtDate(d: Date): string {
   .section-link { font-size: 0.875rem; color: var(--color-fg-muted); text-decoration: none; }
   .section-link:hover { color: var(--color-fg); }
 
-  .post-grid {
+  /* ---------- featured ---------- */
+  .featured-grid {
     list-style: none; padding: 0; margin: 0;
     display: grid; gap: 0.75rem;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: 1fr;
   }
-  .post-card {
-    display: grid; gap: 0.5rem;
-    padding: 1.125rem;
+  @media (min-width: 720px) {
+    .featured-grid { grid-template-columns: 1.5fr 1fr 1fr; grid-template-rows: auto auto; }
+    .f-0 { grid-row: span 2; }
+  }
+  .feat-card {
+    display: flex; flex-direction: column; gap: 0.5rem; height: 100%;
+    padding: 1.5rem;
     background: var(--color-bg-soft);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
@@ -190,8 +264,15 @@ function fmtDate(d: Date): string {
     text-decoration: none;
     transition: border-color 120ms;
   }
-  .post-card:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); color: var(--color-fg); }
-  .post-cat {
+  .feat-card:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
+  .f-0 .feat-card {
+    background: linear-gradient(135deg,
+      color-mix(in oklab, var(--color-accent) 18%, var(--color-bg-soft)),
+      var(--color-bg-soft));
+    border-color: color-mix(in oklab, var(--color-accent) 30%, var(--color-border));
+  }
+  .f-0 .feat-title { font-size: 1.5rem; }
+  .feat-cat {
     align-self: start;
     padding: 0.125rem 0.5rem;
     background: var(--color-bg-muted);
@@ -201,32 +282,84 @@ function fmtDate(d: Date): string {
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
-  .post-title { margin: 0; font-size: 1.0625rem; font-weight: 600; line-height: 1.35; }
-  .post-desc { margin: 0; color: var(--color-fg-muted); font-size: 0.9375rem; }
-  .post-date { color: var(--color-fg-soft); font-size: 0.8125rem; }
+  .feat-title {
+    font-family: var(--font-serif);
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.25;
+  }
+  .feat-desc { color: var(--color-fg-muted); font-size: 0.9375rem; margin: 0; flex: 1; }
+  .feat-meta {
+    display: flex; gap: 0.375rem;
+    color: var(--color-fg-soft); font-size: 0.8125rem;
+  }
 
-  .series-grid {
+  /* ---------- post grid ---------- */
+  .post-grid {
     list-style: none; padding: 0; margin: 0;
-    display: grid; gap: 0.75rem;
+    display: grid; gap: 0.875rem;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
-  .series-card {
-    display: block;
+
+  /* ---------- by category ---------- */
+  .cat-grid {
+    display: grid; gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .cat-block {
     padding: 1.125rem;
     background: var(--color-bg-soft);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
+  }
+  .cat-block-head a {
+    display: flex; align-items: baseline; justify-content: space-between;
+    text-decoration: none; color: var(--color-fg);
+    margin-bottom: 0.625rem; padding-bottom: 0.625rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .cat-block-head h3 { margin: 0; font-size: 0.9375rem; font-weight: 600; }
+  .cat-block-head span { color: var(--color-fg-soft); font-size: 0.75rem; }
+  .cat-block ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.375rem; }
+  .cat-block li a {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 0.625rem;
     color: var(--color-fg);
     text-decoration: none;
+    font-size: 0.875rem;
+    padding: 0.25rem 0;
   }
-  .series-card:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
-  .series-card h3 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 600; }
-  .series-card p { margin: 0 0 0.5rem; color: var(--color-fg-muted); font-size: 0.9375rem; }
-  .series-meta { color: var(--color-fg-soft); font-size: 0.8125rem; }
+  .cat-block-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-block li time { color: var(--color-fg-soft); font-size: 0.75rem; flex-shrink: 0; }
+  .cat-block li a:hover { color: var(--color-accent); }
 
+  /* ---------- series row ---------- */
+  .series-row { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.625rem; }
+  .series-pill {
+    display: inline-flex; align-items: center; gap: 0.625rem;
+    padding: 0.625rem 1rem;
+    background: var(--color-bg-soft);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-button);
+    color: var(--color-fg);
+    text-decoration: none;
+    font-size: 0.875rem;
+  }
+  .series-pill:hover { border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
+  .series-pill-name { font-weight: 500; }
+  .series-pill-count {
+    padding: 0.125rem 0.5rem;
+    background: var(--color-bg-muted);
+    border-radius: 0.25rem;
+    color: var(--color-fg-muted);
+    font-size: 0.6875rem;
+  }
+
+  /* ---------- tag cloud ---------- */
   .tag-cloud { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .tag-chip {
-    display: inline-block;
+    display: inline-flex; align-items: center; gap: 0.375rem;
     padding: 0.375rem 0.75rem;
     background: var(--color-bg-soft);
     border: 1px solid var(--color-border);
@@ -236,4 +369,10 @@ function fmtDate(d: Date): string {
     text-decoration: none;
   }
   .tag-chip:hover { color: var(--color-fg); border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border)); }
+  .tag-chip-count {
+    padding: 0 0.375rem;
+    background: var(--color-bg-muted);
+    border-radius: 0.25rem;
+    font-size: 0.6875rem;
+  }
 </style>

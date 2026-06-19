@@ -1,0 +1,124 @@
+---
+/**
+ * /archive — reverse-chrono list of every post grouped by year.
+ * One row per post (compact). Sticky year headers.
+ */
+import BaseLayout from '~/layouts/BaseLayout.astro'
+import { formatPostDate, getPostsByYear, slugifyTag } from '~/lib/blog'
+import { SITE_CONFIG } from '~/lib/config'
+
+const groups = await getPostsByYear()
+const total = groups.reduce((sum, g) => sum + g.posts.length, 0)
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Archive',
+  url: new URL('/archive/', SITE_CONFIG.url).toString(),
+  description: `${total} posts archived by year.`,
+}
+---
+
+<BaseLayout title="Archive — Blog" description="Every blog post, grouped by year." jsonLd={jsonLd}>
+  <div class="page">
+    <header class="page-head">
+      <h1>Archive</h1>
+      <p class="meta">{total} posts across {groups.length} year{groups.length !== 1 ? 's' : ''}.</p>
+    </header>
+
+    <div class="archive">
+      {groups.map(({ year, posts }) => (
+        <section class="year-block" aria-labelledby={`y-${year}`}>
+          <h2 id={`y-${year}`} class="year">
+            <span>{year}</span>
+            <span class="year-count">{posts.length}</span>
+          </h2>
+          <ul class="row-list">
+            {posts.map((p) => (
+              <li class="row">
+                <time class="row-date" datetime={p.data.pubDate.toISOString()}>
+                  {formatPostDate(p.data.pubDate)}
+                </time>
+                <a class="row-title" href={`/blog/${p.id}`}>{p.data.title}</a>
+                <a class="row-cat" href={`/categories/${slugifyTag(p.data.category)}/`}>
+                  {p.data.category}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page { padding-block: 2.5rem 4rem; }
+  .page-head { margin-bottom: 2rem; }
+  h1 { font-family: var(--font-serif); font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .meta { color: var(--color-fg-muted); font-size: 0.9375rem; margin: 0.5rem 0 0; }
+  .archive { display: flex; flex-direction: column; gap: 2rem; }
+  .year {
+    position: sticky;
+    top: 64px;
+    z-index: 5;
+    margin: 0 0 0.5rem;
+    padding: 0.625rem 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+    background: color-mix(in oklab, var(--color-bg) 85%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .year-count {
+    padding: 0.125rem 0.5rem;
+    background: var(--color-bg-muted);
+    border-radius: 0.25rem;
+    color: var(--color-fg-muted);
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 500;
+  }
+  .row-list { list-style: none; padding: 0; margin: 0; }
+  .row {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+  }
+  .row-date {
+    color: var(--color-fg-soft);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+  .row-title {
+    color: var(--color-fg);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .row-title:hover { color: var(--color-accent); text-decoration: underline; text-underline-offset: 0.2em; }
+  .row-cat {
+    color: var(--color-fg-muted);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    padding: 0.125rem 0.5rem;
+    background: var(--color-bg-muted);
+    border-radius: 0.25rem;
+  }
+  .row-cat:hover { color: var(--color-fg); }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 5.5rem minmax(0, 1fr); }
+    .row-cat { display: none; }
+  }
+</style>

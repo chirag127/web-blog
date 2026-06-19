@@ -1,11 +1,10 @@
 ---
 import HeaderControls from '~/components/HeaderControls.tsx'
-import { FAMILY_SITES } from '@chirag127/oriz-ui'
 ---
 
-<header class="site-header">
+<header class="site-header" transition:persist="site-header">
   <div class="container-page header-inner">
-    <a href="https://oriz.in" class="brand">
+    <a href="/" class="brand">
       <span class="brand-mark">oriz</span>
       <span class="brand-dot">.</span>
       <span class="brand-badge">Blog</span>
@@ -16,10 +15,11 @@ import { FAMILY_SITES } from '@chirag127/oriz-ui'
       <a href="/series/">Series</a>
       <a href="/categories/">Categories</a>
       <a href="/tags/">Tags</a>
+      <a href="/archive/">Archive</a>
       <a href="/about/">About</a>
     </nav>
 
-    <HeaderControls client:idle sites={FAMILY_SITES} />
+    <HeaderControls client:idle />
   </div>
 </header>
 

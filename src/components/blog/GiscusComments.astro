@@ -2,19 +2,22 @@
 /**
  * GiscusComments — lazy-mounts the Giscus iframe via the official
  * client script (https://giscus.app/client.js) once the placeholder
- * scrolls into view. Keeps the homepage-class Lighthouse score by
- * deferring until below-fold.
+ * scrolls into view. The four IDs come from PUBLIC_GISCUS_* env vars
+ * resolved in ~/lib/config.
+ *
+ * If repoId / categoryId are blank (e.g. dev), we render an inline
+ * notice instead of a broken iframe.
  */
 import { SITE_CONFIG } from '~/lib/config'
 
 const g = SITE_CONFIG.giscus
-// If giscus IDs aren't configured yet (e.g. in dev), render nothing.
 const enabled = g.repoId.length > 0 && g.categoryId.length > 0
 ---
 
-{enabled && (
-  <section class="comments" aria-labelledby="comments-heading">
-    <h2 id="comments-heading" class="comments-heading">Comments</h2>
+<section class="comments" aria-labelledby="comments-heading">
+  <h2 id="comments-heading" class="comments-heading">Comments</h2>
+
+  {enabled ? (
     <div
       id="giscus-mount"
       data-giscus-repo={g.repo}
@@ -27,8 +30,13 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
     >
       <p class="comments-placeholder">Loading comments…</p>
     </div>
-  </section>
-)}
+  ) : (
+    <p class="comments-disabled">
+      Comments are powered by <a href="https://giscus.app">giscus</a>. Set
+      <code>PUBLIC_GISCUS_REPO_ID</code> and <code>PUBLIC_GISCUS_CATEGORY_ID</code> in your environment to enable them.
+    </p>
+  )}
+</section>
 
 <script>
   const mount = document.getElementById('giscus-mount')
@@ -47,20 +55,16 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
       script.setAttribute('data-category-id', mount.dataset.giscusCategoryId ?? '')
       script.setAttribute('data-mapping', mount.dataset.giscusMapping ?? 'pathname')
       script.setAttribute('data-strict', '0')
-      script.setAttribute(
-        'data-reactions-enabled',
-        mount.dataset.giscusReactions ?? '1',
-      )
+      script.setAttribute('data-reactions-enabled', mount.dataset.giscusReactions ?? '1')
       script.setAttribute('data-emit-metadata', '0')
+      script.setAttribute('data-input-position', mount.dataset.giscusInputPosition ?? 'bottom')
       script.setAttribute(
-        'data-input-position',
-        mount.dataset.giscusInputPosition ?? 'top',
+        'data-theme',
+        document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark_dimmed',
       )
-      script.setAttribute('data-theme', 'dark_dimmed')
       script.setAttribute('data-lang', 'en')
       script.setAttribute('data-loading', 'lazy')
 
-      // Replace the placeholder so giscus injects its iframe in-place.
       mount.replaceChildren(script)
     }
 
@@ -85,18 +89,28 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
 </script>
 
 <style>
-  .comments {
-    margin-top: 3rem;
-  }
+  .comments { margin-top: 3rem; }
   .comments-heading {
     font-size: 1.25rem;
     font-weight: 600;
     letter-spacing: -0.02em;
     margin: 0 0 1rem;
   }
-  .comments-placeholder {
-    color: var(--color-fg-soft);
+  .comments-placeholder { color: var(--color-fg-soft); font-size: 0.875rem; margin: 0; }
+  .comments-disabled {
+    padding: 1rem 1.25rem;
+    background: var(--color-bg-soft);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-card);
+    color: var(--color-fg-muted);
     font-size: 0.875rem;
     margin: 0;
+  }
+  .comments-disabled code {
+    padding: 0.0625rem 0.375rem;
+    background: var(--color-bg-muted);
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
   }
 </style>

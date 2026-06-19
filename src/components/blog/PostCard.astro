@@ -14,7 +14,7 @@ export interface Props {
 const { post } = Astro.props
 const { title, description, pubDate, category, readingTime } = post.data
 const href = `/blog/${post.id}`
-const catHref = `/blog/category/${slugifyTag(category)}`
+const catHref = `/categories/${slugifyTag(category)}/`
 ---
 
 <article class="post-card">

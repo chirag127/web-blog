@@ -53,7 +53,7 @@ const jsonLd = {
       <nav class="chip-strip" aria-label="Filter posts by category">
         <a class="chip is-active" href="/blog/">All</a>
         {categories.map((c) => (
-          <a class="chip" href={`/blog/category/${slugifyTag(c)}`}>{c}</a>
+          <a class="chip" href={`/categories/${slugifyTag(c)}/`}>{c}</a>
         ))}
       </nav>
     )}
