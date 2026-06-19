@@ -27,7 +27,7 @@ import BaseLayout from '~/layouts/BaseLayout.astro'
         try {
           // @ts-expect-error — pagefind UI runtime
           const { PagefindUI } = await import('@pagefind/default-ui')
-          // @ts-expect-error — pagefind UI css module
+          // @ts-ignore — pagefind UI css module
           await import('@pagefind/default-ui/css/ui.css')
           new PagefindUI({
             element: mount,

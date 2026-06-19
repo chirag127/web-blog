@@ -1,0 +1,105 @@
+---
+/*
+ * SeriesSpine — the oriz-blog signature.
+ *
+ * Renders `●─●─○─○` characters in JetBrains Mono, joined by U+2500 box-drawing
+ * `─` connectors. Filled `●` = published, hollow `○` = drafting (or future),
+ * current dot enlarged 1.4× with cobalt fill (`⦿`).
+ *
+ * Used in four places:
+ *   • Home page in-progress stratum — one row per series, inline after title
+ *   • Post header meta row — inline, current dot enlarged
+ *   • Post sidenote rail — orientation="vertical", sticky on scroll
+ *   • Footer — orientation="horizontal", small, ink-mute
+ *
+ * Props:
+ *   total      total parts in the series
+ *   published  number of parts published (filled dots from the left)
+ *   current    1-based index of the current dot to enlarge (optional)
+ *   size       'sm' (11px footer) | 'md' (default 14px) | 'lg' (header 16px)
+ *   orientation 'horizontal' (default) | 'vertical'
+ */
+
+interface Props {
+  total: number
+  published?: number
+  current?: number
+  size?: 'sm' | 'md' | 'lg'
+  orientation?: 'horizontal' | 'vertical'
+  ariaLabel?: string
+}
+
+const {
+  total,
+  published = 0,
+  current,
+  size = 'md',
+  orientation = 'horizontal',
+  ariaLabel,
+} = Astro.props
+
+// Build an array of dot states.
+type Dot = 'filled' | 'hollow' | 'current'
+const dots: Dot[] = []
+for (let i = 1; i <= total; i++) {
+  if (i === current) dots.push('current')
+  else if (i <= published) dots.push('filled')
+  else dots.push('hollow')
+}
+
+const label = ariaLabel ?? `Series progress: ${published} of ${total} published`
+---
+
+<span
+  class:list={['spine', `spine-${size}`, `spine-${orientation}`]}
+  role="img"
+  aria-label={label}
+>
+  {dots.map((d, i) => (
+    <>
+      {i > 0 && (
+        <span class="spine-connector" aria-hidden="true">
+          {orientation === 'horizontal' ? '─' : '│'}
+        </span>
+      )}
+      <span class={`spine-dot spine-dot-${d}`} aria-hidden="true">
+        {d === 'filled' ? '●' : d === 'current' ? '⦿' : '○'}
+      </span>
+    </>
+  ))}
+</span>
+
+<style>
+  .spine {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' 1, 'zero' 1, 'calt' 0;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .spine-horizontal {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05em;
+  }
+  .spine-vertical {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.05em;
+  }
+
+  .spine-sm { font-size: 11px; }
+  .spine-md { font-size: 14px; }
+  .spine-lg { font-size: 16px; }
+
+  .spine-connector { color: var(--rule); }
+  .spine-dot-filled { color: var(--cobalt); }
+  .spine-dot-hollow { color: var(--ink-mute); }
+  .spine-dot-current {
+    color: var(--cobalt);
+    font-size: 1.4em;
+    line-height: 0.7;
+    transform: translateY(0.05em);
+  }
+</style>

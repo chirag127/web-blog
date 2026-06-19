@@ -220,7 +220,7 @@ export function slugifyTag(value: string): string {
  * Renders the post body, strips MDX/code, and runs reading-time.
  */
 export async function getReadingTime(post: BlogPost): Promise<string> {
-  if (post.data.readingTime) return post.data.readingTime
+  if (post.data.readingTime) return String(post.data.readingTime)
   try {
     const { Content: _Content } = await render(post)
     // We don't have access to plain text easily; estimate from raw body if available.

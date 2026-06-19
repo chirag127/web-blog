@@ -29,7 +29,27 @@ const blog = defineCollection({
     // Strongly typed optionals
     updatedDate: z.coerce.date().optional(),
     heroImage: z.string().optional(),
-    tags: z.array(z.string()).default([]),
+    tags: z
+      .preprocess((v) => {
+        if (v == null) return []
+        if (Array.isArray(v)) return v
+        if (typeof v === 'string') {
+          const trimmed = v.trim()
+          // Some MDX files have flow-style YAML that round-trips as a single string,
+          // e.g. `tags: ["a", "b"]` ends up as the literal string `["a", "b"]`.
+          if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+              const parsed = JSON.parse(trimmed)
+              if (Array.isArray(parsed)) return parsed.map(String)
+            } catch {
+              /* fall through */
+            }
+          }
+          return trimmed.split(',').map((t) => t.trim()).filter(Boolean)
+        }
+        return v
+      }, z.array(z.string()))
+      .default([]),
     category: z.string().default('General'),
     /** Some posts emit plural `categories` instead of singular. Either is fine. */
     categories: z.array(z.string()).optional(),
@@ -37,8 +57,8 @@ const blog = defineCollection({
     author: z.string().default('Chirag Singhal'),
     series: z.string().optional(),
     part: z.union([z.string(), z.number()]).optional(),
-    /** Auto-computed at render-time if absent. */
-    readingTime: z.string().optional(),
+    /** Auto-computed at render-time if absent. Some legacy posts ship a number. */
+    readingTime: z.union([z.string(), z.number()]).optional(),
     canonical: z.string().url().optional(),
     featured: z.boolean().optional(),
 
@@ -48,7 +68,7 @@ const blog = defineCollection({
     seriesOrder: z.union([z.number(), z.string()]).optional(),
     coverImage: z.string().optional(),
     coverImageAlt: z.string().optional(),
-    platforms: z.array(z.string()).optional(),
+    platforms: z.union([z.array(z.string()), z.record(z.string(), z.unknown())]).optional(),
     schema: z.unknown().optional(),
     keywords: z.array(z.string()).optional(),
     showAds: z.boolean().optional(),

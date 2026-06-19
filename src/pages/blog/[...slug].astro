@@ -1,24 +1,31 @@
 ---
 /**
- * /blog/[slug] — single blog post.
- * Renders the MDX body inside `.prose-oriz .container-prose`, plus
- * TOC, share buttons, series nav, related posts, lazy giscus, and
- * a Firestore-backed bookmark button.
+ * /blog/[slug] — single blog post (v2 design).
  *
- * Pagefind picks up the post body via `data-pagefind-body` on the article
- * wrapper; metadata via `data-pagefind-meta="…"` attributes.
+ * Layout:
+ *   single column, 66ch measure, slightly left of optical center
+ *   sidenote rail on left at paper-2 width 22ch (anchors / footnotes / vertical series spine)
+ *   Fraunces SOFT 100 cobalt drop-cap on the first paragraph
+ *   series spine inline in the meta row (when post.data.series is set)
+ *   NO floating share buttons, NO related-posts grid in body
  */
 import type { GetStaticPaths } from 'astro'
 import { type CollectionEntry, render } from 'astro:content'
 import BaseLayout from '~/layouts/BaseLayout.astro'
 import GiscusComments from '~/components/blog/GiscusComments.astro'
-import RelatedPosts from '~/components/blog/RelatedPosts.astro'
 import SeriesNav from '~/components/blog/SeriesNav.astro'
-import ShareButtons from '~/components/blog/ShareButtons.astro'
+import SeriesSpine from '~/components/SeriesSpine.astro'
 import TableOfContents from '~/components/blog/TableOfContents.astro'
 import BookmarkButton from '~/components/blog/BookmarkButton.tsx'
-import { formatPostDate, getPublishedPosts, readingTimeFor, slugifyTag } from '~/lib/blog'
+import {
+  formatPostDate,
+  getPostsInSeries,
+  getPublishedPosts,
+  readingTimeFor,
+  slugifyTag,
+} from '~/lib/blog'
 import { SITE_CONFIG } from '~/lib/config'
+import '~/styles/blog-prose.css'
 
 export const getStaticPaths = (async () => {
   const posts = await getPublishedPosts()
@@ -35,16 +42,31 @@ const { post } = Astro.props as PageProps
 const { Content, headings } = await render(post)
 
 const allPosts = await getPublishedPosts()
-const seriesPosts = post.data.series
-  ? allPosts.filter((p) => p.data.series === post.data.series)
-  : []
+
+// Series spine data — only when this post is in a series.
+let seriesPosts: typeof allPosts = []
+let seriesPublished = 0
+let seriesTotal = 0
+let seriesCurrent = 0
+if (post.data.series) {
+  seriesPosts = await getPostsInSeries(post.data.series)
+  seriesPublished = seriesPosts.length
+  // Where this post sits in the published sequence (1-based).
+  const idx = seriesPosts.findIndex((p) => p.id === post.id)
+  seriesCurrent = idx >= 0 ? idx + 1 : seriesPublished
+  // Heuristic for the "drafting" tail.
+  const explicitMax = seriesPosts.reduce((mx, p) => {
+    const v = typeof p.data.part === 'number' ? p.data.part : Number(p.data.part)
+    return Number.isFinite(v) ? Math.max(mx, v) : mx
+  }, 0)
+  seriesTotal = Math.min(12, Math.max(seriesPublished + 2, explicitMax))
+}
 
 const url = new URL(`/blog/${post.id}/`, SITE_CONFIG.url).toString()
 const datePublished = post.data.pubDate.toISOString()
 const dateModified = (post.data.updatedDate ?? post.data.pubDate).toISOString()
 const rt = post.data.readingTime ?? readingTimeFor(post)
 
-// Article schema
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
@@ -52,16 +74,8 @@ const articleSchema = {
   description: post.data.description,
   datePublished,
   dateModified,
-  author: {
-    '@type': 'Person',
-    name: post.data.author,
-    url: SITE_CONFIG.author.url,
-  },
-  publisher: {
-    '@type': 'Person',
-    name: SITE_CONFIG.author.name,
-    url: SITE_CONFIG.author.url,
-  },
+  author: { '@type': 'Person', name: post.data.author, url: SITE_CONFIG.author.url },
+  publisher: { '@type': 'Person', name: SITE_CONFIG.author.name, url: SITE_CONFIG.author.url },
   mainEntityOfPage: { '@type': 'WebPage', '@id': url },
   keywords: post.data.tags.join(', '),
   articleSection: post.data.category,
@@ -71,7 +85,6 @@ const articleSchema = {
     : undefined,
 }
 
-// BreadcrumbList schema
 const breadcrumbSchema = {
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
@@ -97,7 +110,6 @@ const breadcrumbSchema = {
   updatedDate={post.data.updatedDate}
   image={post.data.heroImage}
   jsonLd={[articleSchema, breadcrumbSchema]}
-  hideSidebar={true}
 >
   <article
     class="post-shell"
@@ -105,28 +117,63 @@ const breadcrumbSchema = {
     data-pagefind-meta={`category:${post.data.category}`}
     data-pagefind-filter={`category:${post.data.category},author:${post.data.author}${post.data.series ? `,series:${post.data.series}` : ''}`}
   >
+    <aside class="post-sidenote" aria-label="Sidenote rail">
+      {post.data.series && seriesTotal > 0 && (
+        <div class="rail-spine">
+          <p class="rail-h mono">{post.data.series}</p>
+          <SeriesSpine
+            total={seriesTotal}
+            published={seriesPublished}
+            current={seriesCurrent}
+            size="md"
+            orientation="vertical"
+            ariaLabel={`Series progress: part ${seriesCurrent} of ${seriesTotal}`}
+          />
+        </div>
+      )}
+      <nav class="rail-toc" aria-label="On this page">
+        <p class="rail-h mono">On this page</p>
+        <TableOfContents headings={headings} />
+      </nav>
+    </aside>
+
     <div class="post-main">
       <header class="post-header">
-        <p class="post-eyebrow">
+        <p class="post-meta mono">
           <a href={`/categories/${slugifyTag(post.data.category)}/`} data-pagefind-meta="category">
             {post.data.category}
           </a>
-          <span aria-hidden="true">·</span>
+          <span class="dot" aria-hidden="true">·</span>
+          <time datetime={datePublished}>{formatPostDate(post.data.pubDate)}</time>
+          <span class="dot" aria-hidden="true">·</span>
           <span>{rt}</span>
+          {post.data.series && seriesTotal > 0 && (
+            <>
+              <span class="dot" aria-hidden="true">·</span>
+              <span class="post-meta-spine">
+                <SeriesSpine
+                  total={seriesTotal}
+                  published={seriesPublished}
+                  current={seriesCurrent}
+                  size="md"
+                />
+              </span>
+            </>
+          )}
         </p>
         <h1 class="post-title" transition:name={`title-${post.id}`}>{post.data.title}</h1>
-        <p class="post-desc">{post.data.description}</p>
+        {post.data.description && (
+          <p class="post-dek">{post.data.description}</p>
+        )}
         <div class="post-byline">
           <span>
             By <a href={`/authors/${slugifyTag(post.data.author)}/`} rel="author">
               {post.data.author}
             </a>
           </span>
-          <span aria-hidden="true">·</span>
-          <time datetime={datePublished}>{formatPostDate(post.data.pubDate)}</time>
           {post.data.updatedDate && (
             <>
-              <span aria-hidden="true">·</span>
+              <span class="dot" aria-hidden="true">·</span>
               <span>Updated {formatPostDate(post.data.updatedDate)}</span>
             </>
           )}
@@ -144,17 +191,15 @@ const breadcrumbSchema = {
       </header>
 
       {post.data.series && seriesPosts.length > 1 && (
-        <div class="container-prose">
-          <SeriesNav post={post} allInSeries={seriesPosts} />
-        </div>
+        <SeriesNav post={post} allInSeries={seriesPosts} />
       )}
 
-      <div class="post-body container-prose prose-oriz">
+      <div class="post-body prose-blog">
         <Content />
       </div>
 
       {post.data.tags.length > 0 && (
-        <ul class="post-tags container-prose" aria-label="Tags">
+        <ul class="post-tags" aria-label="Tags">
           {post.data.tags.map((t) => (
             <li>
               <a class="post-tag" href={`/tags/${slugifyTag(t)}/`}>#{t}</a>
@@ -163,22 +208,10 @@ const breadcrumbSchema = {
         </ul>
       )}
 
-      <div class="post-share container-prose">
-        <ShareButtons title={post.data.title} url={url} />
-      </div>
-
-      <div class="post-related container-prose">
-        <RelatedPosts current={post} candidates={allPosts} />
-      </div>
-
-      <div class="post-comments container-prose">
+      <div class="post-comments">
         <GiscusComments />
       </div>
     </div>
-
-    <aside class="post-aside" aria-label="Table of contents">
-      <TableOfContents headings={headings} />
-    </aside>
   </article>
 
   <script define:vars={{ slug: post.id, url, title: post.data.title }}>
@@ -195,42 +228,104 @@ const breadcrumbSchema = {
 
 <style>
   .post-shell {
-    padding-block: 3rem;
-    display: grid;
-    gap: 2rem;
-    max-width: var(--container-page, 1200px);
+    /* Single-column with sidenote rail on the left at 22ch.
+       The body stays at 66ch and is "slightly left of optical center"
+       because the rail visually pulls the page leftward. */
+    max-width: 1100px;
     margin-inline: auto;
     padding-inline: clamp(1rem, 4vw, 2rem);
+    padding-block: 2.5rem 4rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
   }
+  .post-sidenote { display: none; }
   .post-main { min-width: 0; }
+
+  @media (min-width: 1024px) {
+    .post-shell {
+      grid-template-columns: 22ch minmax(0, 1fr);
+      gap: 3rem;
+      align-items: start;
+    }
+    .post-sidenote {
+      display: block;
+      position: sticky;
+      top: 80px;
+      padding-top: 0.5rem;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+  }
+
+  .rail-h {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-mute);
+    margin: 0 0 0.625rem;
+  }
+  .rail-spine {
+    margin-bottom: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .rail-toc :global(nav) {
+    font-size: 13px;
+    color: var(--ink-mute);
+    line-height: 1.45;
+  }
+  .rail-toc :global(a) {
+    color: var(--ink-mute);
+    text-decoration: none;
+    display: block;
+    padding-block: 0.25rem;
+  }
+  .rail-toc :global(a:hover) { color: var(--cobalt); }
+
+  /* ── Post header ──────────────────────────────────────────────────── */
+
   .post-header {
-    max-width: var(--container-prose, 720px);
+    max-width: 66ch;
     margin-inline: auto;
     text-align: left;
+    margin-bottom: 2rem;
   }
-  .post-eyebrow {
+  .post-meta {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: baseline;
     gap: 0.5rem;
-    color: var(--color-fg-muted);
-    font-size: 0.8125rem;
-    margin: 0 0 0.75rem;
-  }
-  .post-eyebrow a { color: var(--color-fg-muted); text-decoration: none; }
-  .post-eyebrow a:hover { color: var(--color-fg); }
-  .post-title {
-    font-family: var(--font-serif);
-    font-size: clamp(2rem, 5vw, 2.75rem);
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1.15;
-    margin: 0 0 0.75rem;
-    color: var(--color-fg);
-  }
-  .post-desc {
-    color: var(--color-fg-muted);
-    font-size: 1.0625rem;
+    color: var(--ink-mute);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     margin: 0 0 1rem;
+  }
+  .post-meta a { color: var(--ink-mute); text-decoration: none; }
+  .post-meta a:hover { color: var(--cobalt); }
+  .post-meta .dot { color: var(--rule); }
+  .post-meta-spine { display: inline-flex; align-items: baseline; }
+
+  .post-title {
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 96, 'SOFT' 50, 'wght' 380;
+    font-size: clamp(2rem, 4.6vw, 41.5px);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.75rem;
+    color: var(--ink);
+    /* "two lines max" — falls out of font-size + measure naturally */
+  }
+  .post-dek {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.0625rem;
+    color: var(--ink-mute);
+    margin: 0 0 1.25rem;
     max-width: 60ch;
   }
   .post-byline {
@@ -238,54 +333,48 @@ const breadcrumbSchema = {
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    color: var(--color-fg-soft);
-    font-size: 0.875rem;
-    margin: 0 0 2rem;
+    color: var(--ink-mute);
+    font-family: var(--font-sans);
+    font-size: 13.6px;
+    margin: 0 0 1.25rem;
     padding-bottom: 1.25rem;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
-  .post-byline a { color: var(--color-fg-muted); text-decoration: none; }
-  .post-byline a:hover { color: var(--color-fg); }
+  .post-byline a {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--rule);
+  }
+  .post-byline a:hover { color: var(--cobalt); text-decoration-color: var(--cobalt); }
   .post-byline-spacer { flex: 1; }
-  .post-body { margin-top: 2rem; }
+  .post-byline .dot { color: var(--rule); }
+
+  .post-body { margin-top: 1.5rem; }
+
   .post-tags {
     list-style: none;
     margin: 2.5rem auto 0;
+    padding: 0;
+    max-width: 66ch;
     display: flex;
     flex-wrap: wrap;
     gap: 0.375rem;
   }
   .post-tag {
     display: inline-block;
-    padding: 0.25rem 0.625rem;
-    background: var(--color-bg-soft);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    font-size: 0.8125rem;
-    color: var(--color-fg-muted);
+    padding: 0.125rem 0.625rem;
+    border: 1px solid var(--rule);
+    color: var(--ink-mute);
+    font-family: var(--font-mono);
+    font-size: 12px;
     text-decoration: none;
   }
-  .post-tag:hover {
-    color: var(--color-fg);
-    border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border));
-  }
-  .post-share { margin-top: 2rem; }
-  .post-related,
-  .post-comments { margin-top: 2rem; }
+  .post-tag:hover { color: var(--cobalt); border-color: var(--cobalt); }
 
-  .post-aside { display: none; }
-
-  @media (min-width: 1024px) {
-    .post-shell {
-      grid-template-columns: minmax(0, 1fr) 240px;
-      align-items: start;
-      gap: 3rem;
-    }
-    .post-aside {
-      display: block;
-      padding-top: 6rem;
-      position: sticky;
-      top: 80px;
-    }
+  .post-comments {
+    margin-top: 3rem;
+    max-width: 66ch;
+    margin-inline: auto;
   }
 </style>

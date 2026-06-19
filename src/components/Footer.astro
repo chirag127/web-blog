@@ -1,97 +1,117 @@
 ---
-import { FAMILY_SITES } from '@chirag127/oriz-ui'
-const year = new Date().getFullYear()
+/*
+ * Footer — three stacked lines, no columns.
+ *
+ *   Line 1: Written in Bhubaneswar. <N> posts and counting.
+ *   Line 2: ●─●─○─○ active-series miniature spine
+ *   Line 3: rss · sitemap · source on github · oriz.in
+ *
+ * Inter Tight 13.6px, ink-mute. NO newsletter signup, NO social icon strip.
+ * The active-series spine on line 2 is the typographic signature.
+ */
+import SeriesSpine from '~/components/SeriesSpine.astro'
+import { getCollection } from 'astro:content'
+
+interface Props {
+  /** Optional override for the post-count line. */
+  postCount?: number
+  /** Optional active series — name + total + published, for the line-2 spine. */
+  activeSeries?: { name: string; total: number; published: number; href?: string } | null
+}
+
+const { postCount: postCountProp, activeSeries: activeSeriesProp } = Astro.props
+
+// Compute post-count if not provided.
+let postCount = postCountProp
+if (postCount === undefined) {
+  try {
+    const all = await getCollection('blog', ({ data }) => data.draft === false)
+    postCount = all.length
+  } catch {
+    postCount = 0
+  }
+}
+
+// If no active series passed, leave line 2 with a default spine that hints
+// at multi-part work without claiming a specific series.
+const series = activeSeriesProp ?? { name: 'Building oriz', total: 12, published: 6, href: '/series/' }
+
+const deployTime =
+  import.meta.env.PUBLIC_DEPLOY_TIME ?? new Date().toISOString().slice(0, 10)
+const gitSha = import.meta.env.PUBLIC_GIT_SHA ?? 'dev'
 ---
 
 <footer class="site-footer">
+  <hr class="hairline" />
   <div class="container-page footer-inner">
-    <div class="footer-col">
-      <p class="footer-brand">Blog</p>
-      <p class="footer-tag">
-        Long-form writing on engineering, finance, and books — by
-        <a href="https://oriz.in/about/">Chirag Singhal</a>.
-      </p>
-    </div>
-
-    <div class="footer-col">
-      <h2 class="footer-h">Site</h2>
-      <ul class="footer-links">
-        <li><a href="/blog/">Posts</a></li>
-        <li><a href="/series/">Series</a></li>
-        <li><a href="/categories/">Categories</a></li>
-        <li><a href="/tags/">Tags</a></li>
-        <li><a href="/about/">About</a></li>
-        <li><a href="/contact/">Contact</a></li>
-        <li><a href="/rss.xml">RSS feed</a></li>
-      </ul>
-    </div>
-
-    <div class="footer-col">
-      <h2 class="footer-h">Family</h2>
-      <ul class="footer-links">
-        {FAMILY_SITES.map((s) => (
-          <li><a href={s.url}>{s.name}</a></li>
-        ))}
-      </ul>
-    </div>
-
-    <div class="footer-col">
-      <h2 class="footer-h">Legal</h2>
-      <ul class="footer-links">
-        <li><a href="/legal/privacy/">Privacy</a></li>
-        <li><a href="/legal/terms/">Terms</a></li>
-        <li><a href="/legal/disclaimer/">Disclaimer</a></li>
-        <li><a href="/legal/cookies/">Cookies</a></li>
-        <li><a href="/legal/grievance/">Grievance officer</a></li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="container-page footer-bottom">
-    <p>&copy; {year} Chirag Singhal. Part of the <a href="https://oriz.in">oriz</a> family.</p>
+    <p class="line line-1">
+      Written in Bhubaneswar. {postCount} post{postCount === 1 ? '' : 's'} and counting.
+    </p>
+    <p class="line line-2">
+      <a href={series.href ?? '/series/'} class="series-link">
+        <span class="series-name">{series.name}</span>
+        <span class="series-spine-mount">
+          <SeriesSpine total={series.total} published={series.published} size="sm" />
+        </span>
+      </a>
+    </p>
+    <p class="line line-3">
+      <a href="/rss.xml">rss</a>
+      <span class="dot" aria-hidden="true">·</span>
+      <a href="/sitemap-index.xml">sitemap</a>
+      <span class="dot" aria-hidden="true">·</span>
+      <a href="https://github.com/chirag127/oriz-blog">source on github</a>
+      <span class="dot" aria-hidden="true">·</span>
+      <a href="https://oriz.in">oriz.in</a>
+    </p>
+    <p class="line line-meta mono">
+      <time datetime={deployTime}>{deployTime}</time>
+      <span class="dot" aria-hidden="true">·</span>
+      <span>commit <code>{gitSha}</code></span>
+    </p>
   </div>
 </footer>
 
 <style>
   .site-footer {
     margin-top: 6rem;
-    padding-block: 3rem 1.5rem;
-    border-top: 1px solid var(--color-border);
-    background: var(--color-bg-soft);
+    background: var(--paper-2);
   }
   .footer-inner {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2rem;
+    padding-block: 2rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
   }
-  @media (min-width: 640px) { .footer-inner { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1024px) { .footer-inner { grid-template-columns: 2fr 1fr 1fr 1fr; } }
-  .footer-brand {
-    font-family: var(--font-serif);
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin: 0 0 0.5rem;
+  .line {
+    margin: 0;
+    font-family: 'Inter Tight', var(--font-sans);
+    font-size: 13.6px;
+    color: var(--ink-mute);
+    line-height: 1.5;
   }
-  .footer-tag { color: var(--color-fg-muted); margin: 0; max-width: 36ch; }
-  .footer-tag a { color: var(--color-fg-muted); }
-  .footer-tag a:hover { color: var(--color-fg); }
-  .footer-h {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-fg-muted);
-    margin: 0 0 0.75rem;
+  .line a { color: var(--ink-mute); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: var(--rule); }
+  .line a:hover { color: var(--cobalt); text-decoration-color: var(--cobalt); }
+  .line .dot { margin-inline: 0.5rem; color: var(--rule); }
+
+  .line-2 .series-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    text-decoration: none;
+    color: var(--ink-mute);
   }
-  .footer-links { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-  .footer-links a { color: var(--color-fg-muted); text-decoration: none; font-size: 0.9375rem; }
-  .footer-links a:hover { color: var(--color-fg); }
-  .footer-bottom {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border);
-    color: var(--color-fg-soft);
-    font-size: 0.8125rem;
+  .line-2 .series-link:hover { color: var(--cobalt); }
+  .line-2 .series-name {
+    font-style: italic;
   }
-  .footer-bottom p { margin: 0; }
-  .footer-bottom a { color: var(--color-fg-muted); }
+  .line-2 .series-spine-mount { display: inline-flex; }
+
+  .line-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-top: 0.5rem;
+  }
+  .line-meta code { color: var(--ink); }
 </style>

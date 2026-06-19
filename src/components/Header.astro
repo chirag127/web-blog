@@ -1,25 +1,32 @@
 ---
+/*
+ * Header — 60px chrome bar (the v2 brief calls for 60px; we honor it).
+ *
+ * Layout:
+ *   ┌─────────────────────────────────────────────────────────────────┐
+ *   │  oriz / blog                              ⌘K · rss · ···        │
+ *   └─────────────────────────────────────────────────────────────────┘
+ *
+ * Left:  Wordmark `oriz / blog` in Fraunces small caps.
+ * Center: nothing (intentional).
+ * Right: search trigger (⌘K, opens Pagefind in a centered modal),
+ *        rss link, ··· overflow with /about /now /series + theme toggle.
+ *
+ * The brief specified 60px height; the heading "Header chrome (60px)"
+ * overrides the brief's earlier "Single line at 64px". 60px wins.
+ */
+import Wordmark from '~/components/Wordmark.astro'
 import HeaderControls from '~/components/HeaderControls.tsx'
 ---
 
 <header class="site-header" transition:persist="site-header">
   <div class="container-page header-inner">
-    <a href="/" class="brand">
-      <span class="brand-mark">oriz</span>
-      <span class="brand-dot">.</span>
-      <span class="brand-badge">Blog</span>
-    </a>
-
-    <nav aria-label="Primary" class="primary-nav">
-      <a href="/blog/">Posts</a>
-      <a href="/series/">Series</a>
-      <a href="/categories/">Categories</a>
-      <a href="/tags/">Tags</a>
-      <a href="/archive/">Archive</a>
-      <a href="/about/">About</a>
-    </nav>
-
-    <HeaderControls client:idle />
+    <div class="brand">
+      <Wordmark subtitle="blog" size={22} href="/" />
+    </div>
+    <div class="header-controls-mount">
+      <HeaderControls client:idle />
+    </div>
   </div>
 </header>
 
@@ -28,54 +35,26 @@ import HeaderControls from '~/components/HeaderControls.tsx'
     position: sticky;
     top: 0;
     z-index: 50;
-    background: color-mix(in oklab, var(--color-bg) 85%, transparent);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid var(--color-border);
+    background: color-mix(in oklab, var(--paper) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+    border-bottom: 1px solid var(--rule);
   }
   .header-inner {
-    height: 64px;
+    height: 60px;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
   }
   .brand {
+    flex: 0 0 auto;
     display: inline-flex;
-    align-items: baseline;
-    gap: 0.375rem;
-    font-family: var(--font-serif);
-    font-size: 1.25rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    text-decoration: none;
-    color: var(--color-fg);
-    line-height: 1;
+    align-items: center;
+    font-feature-settings: 'smcp' 1;
   }
-  .brand-dot { color: var(--color-accent); }
-  .brand-badge {
-    margin-left: 0.25rem;
-    padding: 0.125rem 0.5rem;
-    background: var(--color-bg-soft);
-    border: 1px solid var(--color-border);
-    border-radius: 0.375rem;
-    font-family: var(--font-sans);
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: var(--color-fg-muted);
-  }
-  .primary-nav {
-    display: none;
-    gap: 1.25rem;
-    flex: 1;
-    font-size: 0.9375rem;
-  }
-  .primary-nav a {
-    color: var(--color-fg-muted);
-    text-decoration: none;
-  }
-  .primary-nav a:hover { color: var(--color-fg); }
-  @media (min-width: 768px) {
-    .primary-nav { display: flex; }
+  .header-controls-mount {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
   }
 </style>

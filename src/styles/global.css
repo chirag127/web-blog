@@ -1,30 +1,262 @@
 @import 'tailwindcss';
-@import '@chirag127/oriz-ui/styles';
-@import '@chirag127/oriz-ui/components.css';
 
 /*
- * Site-specific overrides for the blog. The bulk of the design system
- * (themes, accents, container utilities, prose) comes from
- * @chirag127/oriz-ui above.
+ * oriz-blog — v2 design tokens.
+ *
+ * Cream paper surface · cobalt accent · Fraunces display · Source Serif 4 body.
+ * One of two sites approved for Fraunces (the other is oriz-finance).
+ *
+ * Family-anchor token names (--paper, --ink, --rule, --cobalt) are stable
+ * across the family — sister sites copy this file and swap values. The
+ * legacy `--color-*` block at the bottom keeps existing pages compiling
+ * while they migrate to the new names.
  */
 
-/* Skip-link helper used by BaseLayout. */
+@theme {
+  --font-display:
+    'Fraunces', 'Source Serif 4', 'GT Sectra', 'Iowan Old Style', Georgia, serif;
+  --font-serif:
+    'Source Serif 4', 'Iowan Old Style', Georgia, serif;
+  --font-sans:
+    'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --container-spine: 920px;
+  --container-prose: 66ch;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* v2 brief tokens — cream + ink + cobalt. */
+    --paper: #fbfaf7;
+    --paper-2: #f4f1ea;
+    --ink: #11131a;
+    --ink-mute: #5a5e6b;
+    --rule: #d9d2c2;
+    --cobalt: #1f4fd8;
+
+    /* Extra hooks needed by the auth/contact data-oriz-* overrides. */
+    --vermilion: #b6371f; /* not used in chrome — error states only */
+    --highlighter: #1f4fd8;
+
+    /* ---- Legacy --color-* aliases ----
+     * Existing routes reference these; keep them mapped to v2 tokens so
+     * we don't have to rewrite every page in this commit. */
+    --color-bg: var(--paper);
+    --color-bg-soft: var(--paper-2);
+    --color-bg-muted: #ebe6d8;
+    --color-fg: var(--ink);
+    --color-prose: var(--ink);
+    --color-fg-muted: var(--ink-mute);
+    --color-fg-soft: #7d7e88;
+    --color-border: var(--rule);
+    --color-accent: var(--cobalt);
+    --color-accent-fg: var(--paper);
+    --radius-card: 0;
+    --radius-button: 0;
+    --container-page: 1100px;
+  }
+
+  /* Dark variant — only when the user explicitly prefers it. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --paper: #12141b;
+      --paper-2: #1a1d27;
+      --ink: #e8e4d8;
+      --ink-mute: #9a9ba8;
+      --rule: #2e3140;
+      --cobalt: #7aa0ff;
+      --vermilion: #e87a5e;
+      --highlighter: #7aa0ff;
+
+      --color-bg-muted: #232634;
+      --color-fg-soft: #7d8090;
+      --color-accent-fg: #0a0c12;
+    }
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 17px;
+    line-height: 1.65;
+    overflow-y: scroll;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code, kbd, pre, samp, .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' 1, 'zero' 1, 'calt' 0;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--cobalt) 25%, transparent);
+    color: var(--ink);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+/* ── Layout helpers ───────────────────────────────────────────────────── */
+
+.spine {
+  max-width: var(--container-spine);
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 4vw, 2rem);
+}
+.hairline {
+  height: 1px;
+  background: var(--rule);
+  border: 0;
+  margin: 0;
+}
+
+.container-page {
+  max-width: var(--container-page, 1100px);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+.container-prose {
+  max-width: var(--container-prose);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 1.25rem);
+}
+
+/* ── Skip link ────────────────────────────────────────────────────────── */
+
 .skip-link {
   position: absolute;
   left: -9999px;
   top: 0;
-  background: var(--color-accent);
-  color: var(--color-accent-fg);
+  background: var(--cobalt);
+  color: var(--paper);
   padding: 0.5rem 1rem;
   z-index: 100;
-  border-radius: 0 0 0.5rem 0;
 }
 .skip-link:focus { left: 0; }
 
-/* ---------- KaTeX overrides ----------
- * The vendored KaTeX stylesheet uses its own base font sizing; nudge it to
- * sit nicely within the prose scale.
- */
+/* ── Page-head + prose utility (used by /about, /contact, /legal/*, …) ─ */
+
+.page-head {
+  padding-block: clamp(2rem, 6vw, 3.5rem) 1.5rem;
+  border-bottom: 1px solid var(--rule);
+  max-width: var(--container-prose);
+  margin-inline: auto;
+}
+.page-head .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 0 0 0.875rem;
+}
+.page-head .eyebrow a { color: var(--ink-mute); }
+.page-head .eyebrow a:hover { color: var(--cobalt); }
+.page-head h1 {
+  font-family: var(--font-display);
+  font-weight: 380;
+  font-variation-settings: 'opsz' 96, 'SOFT' 50;
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  margin: 0;
+  color: var(--ink);
+}
+.page-head .lede,
+.page-head .meta {
+  margin: 0.75rem 0 0;
+  color: var(--ink-mute);
+}
+.page-head .meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.prose {
+  padding-block: 2.5rem 4rem;
+  color: var(--ink);
+  line-height: 1.65;
+  font-size: 17px;
+  font-family: var(--font-serif);
+  max-width: var(--container-prose);
+  margin-inline: auto;
+}
+.prose .lede {
+  font-size: 1.1875rem;
+  color: var(--ink);
+  margin: 0 0 2rem;
+}
+.prose h2 {
+  font-family: var(--font-display);
+  font-weight: 380;
+  font-variation-settings: 'opsz' 60, 'SOFT' 40;
+  font-size: 1.6625rem;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 2.5rem 0 1rem;
+}
+.prose h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 36, 'SOFT' 30;
+  font-size: 1.3125rem;
+  color: var(--ink);
+  margin: 1.75rem 0 0.625rem;
+}
+.prose p { margin: 0 0 1.25rem; }
+.prose a {
+  color: var(--cobalt);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--cobalt) 40%, transparent);
+}
+.prose a:hover { text-decoration-color: var(--cobalt); }
+.prose strong { color: var(--ink); font-weight: 600; }
+.prose ul, .prose ol { padding-left: 1.5rem; margin: 0 0 1.25rem; }
+.prose li { margin-bottom: 0.5rem; }
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.125em 0.375em;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+.prose blockquote {
+  border-left: 2px solid var(--cobalt);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--ink-mute);
+  font-style: italic;
+}
+.prose hr {
+  height: 1px;
+  background: var(--rule);
+  border: 0;
+  margin: 2.5rem 0;
+}
+
+/* ── KaTeX overrides ─────────────────────────────────────────────────── */
+
 .katex { font-size: 1.05em; }
 .katex-display {
   margin-block: 1.25rem;
@@ -34,47 +266,38 @@
 }
 .katex-display::-webkit-scrollbar { height: 6px; }
 .katex-display::-webkit-scrollbar-thumb {
-  background: color-mix(in oklab, var(--color-fg-muted) 30%, transparent);
-  border-radius: 3px;
+  background: color-mix(in oklab, var(--ink-mute) 30%, transparent);
 }
-.prose-oriz .katex { color: inherit; }
 
-/* ---------- Pagefind UI dark-theme polish ---------- */
-[data-theme='dark'] .pagefind-ui,
-[data-theme='hc'] .pagefind-ui {
-  --pagefind-ui-text: var(--color-fg);
-  --pagefind-ui-background: var(--color-bg-soft);
-  --pagefind-ui-border: var(--color-border);
-  --pagefind-ui-tag: var(--color-bg-muted);
+/* ── Pagefind UI polish ──────────────────────────────────────────────── */
+
+.pagefind-ui {
+  --pagefind-ui-text: var(--ink);
+  --pagefind-ui-background: var(--paper);
+  --pagefind-ui-border: var(--rule);
+  --pagefind-ui-tag: var(--paper-2);
+  --pagefind-ui-primary: var(--cobalt);
+  --pagefind-ui-border-width: 1px;
+  --pagefind-ui-border-radius: 0;
+  --pagefind-ui-font: var(--font-serif);
 }
-.pagefind-ui__result-link { color: var(--color-fg) !important; }
+.pagefind-ui__result-link { color: var(--ink) !important; }
 .pagefind-ui__result-excerpt mark {
-  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  background: color-mix(in oklab, var(--cobalt) 25%, transparent);
   color: inherit;
   padding: 0 0.125rem;
-  border-radius: 0.125rem;
 }
 
-/* ---------- expressive-code shell ---------- */
-.expressive-code { margin-block: 1.25rem; }
-.expressive-code .frame { background: var(--color-bg-soft); }
+/* ── expressive-code shell ───────────────────────────────────────────── */
 
-/* ---------- view-transitions ---------- */
+.expressive-code { margin-block: 1.5rem; }
+.expressive-code .frame { background: var(--paper-2); }
+
+/* ── view-transitions ────────────────────────────────────────────────── */
+
 @media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: 220ms;
   }
-}
-
-/* ---------- generic helpers used by listing pages ---------- */
-.container-page {
-  max-width: var(--container-page, 1200px);
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 4vw, 2rem);
-}
-.container-prose {
-  max-width: var(--container-prose, 720px);
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 4vw, 1.25rem);
 }

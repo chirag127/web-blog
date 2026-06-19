@@ -1,45 +1,32 @@
 /**
- * Header controls — Pagefind search dialog (⌘K), theme switcher, accent
- * picker, auth button. One React island for the whole interactive cluster
- * so we ship a single hydration boundary.
+ * Header controls — the right side of the v2 60px header.
  *
- * Search uses Pagefind — the default UI mounts inside our sheet, scoped to
- * the blog corpus. Falls back gracefully when Pagefind isn't available
- * (e.g. on dev start before the index is built).
+ *   ⌘K · rss · ···
+ *
+ * - ⌘K opens the Pagefind search modal (`/`, ⌘K, Ctrl+K)
+ * - rss is a plain link
+ * - ··· opens an overflow menu with /about, /now, /series and a theme toggle
+ *
+ * No accent picker (the v2 design has a single accent: cobalt). No theme
+ * picker in the header chrome — it lives behind the ··· overflow per the
+ * brief.
  */
 import { useEffect, useId, useRef, useState } from 'react'
-import { Palette, Search, Sun, User } from 'lucide-react'
 
-const THEMES = [
-  { id: 'dark', label: 'Dark' },
-  { id: 'light', label: 'Light' },
-  { id: 'sepia', label: 'Sepia' },
-  { id: 'hc', label: 'High contrast' },
-] as const
-
-const ACCENTS = [
-  { id: 'amber', hex: '#f59e0b', label: 'Amber' },
-  { id: 'sky', hex: '#0ea5e9', label: 'Sky' },
-  { id: 'emerald', hex: '#10b981', label: 'Emerald' },
-  { id: 'rose', hex: '#f43f5e', label: 'Rose' },
-  { id: 'violet', hex: '#8b5cf6', label: 'Violet' },
-  { id: 'monochrome', hex: 'currentColor', label: 'Monochrome' },
-] as const
-
-type ThemeId = (typeof THEMES)[number]['id']
-type AccentId = (typeof ACCENTS)[number]['id']
+type Theme = 'auto' | 'light' | 'dark'
 
 export default function HeaderControls() {
-  const [theme, setTheme] = useState<ThemeId>('dark')
-  const [accent, setAccent] = useState<AccentId>('amber')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, setTheme] = useState<Theme>('auto')
   const mountRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(false)
-  const searchId = useId()
+  const id = useId()
 
   useEffect(() => {
-    setTheme((localStorage.getItem('oriz:theme') as ThemeId) || 'dark')
-    setAccent((localStorage.getItem('oriz:accent') as AccentId) || 'amber')
+    const stored = (localStorage.getItem('oriz:theme') as Theme | null) ?? 'auto'
+    setTheme(stored)
+    applyTheme(stored, false)
 
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -53,27 +40,25 @@ export default function HeaderControls() {
         }
       } else if (e.key === 'Escape') {
         setSearchOpen(false)
+        setMenuOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Lazy-load + mount Pagefind UI when the sheet opens.
   useEffect(() => {
     if (!searchOpen || !mountRef.current || mountedRef.current) return
     let cancelled = false
-
     const load = async () => {
       try {
         const [{ PagefindUI }] = await Promise.all([
           // @ts-expect-error — runtime import; types not bundled
           import('@pagefind/default-ui'),
-          // @ts-expect-error — pagefind UI requires its own CSS
+          // @ts-ignore — pagefind UI requires its own CSS
           import('@pagefind/default-ui/css/ui.css'),
         ])
         if (cancelled || !mountRef.current) return
-        // Clear any previous content
         mountRef.current.innerHTML = ''
         new PagefindUI({
           element: mountRef.current,
@@ -90,86 +75,89 @@ export default function HeaderControls() {
       } catch (e) {
         if (mountRef.current) {
           mountRef.current.innerHTML =
-            '<p style="padding:1.25rem;color:var(--color-fg-muted)">Search isn\'t available yet. Run <code>pnpm build</code> to generate the index, then try again.</p>'
+            '<p style="padding:1.25rem;color:var(--ink-mute)">Search isn\'t available yet. Run <code>pnpm build</code> to generate the index, then try again.</p>'
         }
         // eslint-disable-next-line no-console
         console.error('Pagefind UI failed to load', e)
       }
     }
     void load()
-
     return () => {
       cancelled = true
     }
   }, [searchOpen])
 
-  const applyTheme = (next: ThemeId) => {
+  const applyTheme = (next: Theme, persist = true) => {
+    if (next === 'auto') {
+      document.documentElement.removeAttribute('data-theme')
+    } else {
+      document.documentElement.setAttribute('data-theme', next)
+    }
+    if (persist) localStorage.setItem('oriz:theme', next)
     setTheme(next)
-    localStorage.setItem('oriz:theme', next)
-    document.documentElement.setAttribute('data-theme', next)
-  }
-  const applyAccent = (next: AccentId) => {
-    setAccent(next)
-    localStorage.setItem('oriz:accent', next)
-    document.documentElement.setAttribute('data-accent', next)
   }
 
   return (
     <>
-      <div className="controls">
+      <div className="hc">
         <button
           type="button"
-          className="ctrl-btn"
+          className="hc-trigger"
           onClick={() => setSearchOpen(true)}
           aria-label="Search the blog (⌘K)"
         >
-          <Search size={16} aria-hidden="true" />
-          <span className="ctrl-label">Search</span>
-          <kbd className="kbd">⌘K</kbd>
+          <span className="hc-kbd mono">⌘K</span>
+        </button>
+        <a className="hc-link" href="/rss.xml" aria-label="RSS feed">rss</a>
+        <button
+          type="button"
+          className="hc-trigger hc-overflow"
+          aria-label="More"
+          aria-expanded={menuOpen}
+          aria-controls={`${id}-menu`}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          ···
         </button>
 
-        <div className="ctrl-group">
-          <label className="ctrl-icon-label" htmlFor={`${searchId}-theme`}>
-            <Sun size={16} aria-hidden="true" />
-            <span className="sr-only">Theme</span>
-          </label>
-          <select
-            id={`${searchId}-theme`}
-            className="ctrl-select"
-            value={theme}
-            onChange={(e) => applyTheme(e.target.value as ThemeId)}
-          >
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ctrl-group">
-          <label className="ctrl-icon-label" htmlFor={`${searchId}-accent`}>
-            <Palette size={16} aria-hidden="true" />
-            <span className="sr-only">Accent</span>
-          </label>
-          <select
-            id={`${searchId}-accent`}
-            className="ctrl-select"
-            value={accent}
-            onChange={(e) => applyAccent(e.target.value as AccentId)}
-          >
-            {ACCENTS.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <a href="/account/" className="ctrl-btn ctrl-btn-primary" aria-label="Sign in">
-          <User size={16} aria-hidden="true" />
-          <span className="ctrl-label">Sign in</span>
-        </a>
+        {menuOpen && (
+          <div className="hc-menu" id={`${id}-menu`} role="menu">
+            <a href="/about/" role="menuitem">about</a>
+            <a href="/now/" role="menuitem">now</a>
+            <a href="/series/" role="menuitem">series</a>
+            <a href="/archive/" role="menuitem">archive</a>
+            <a href="/account/" role="menuitem">account</a>
+            <hr />
+            <p className="hc-menu-h mono">theme</p>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={theme === 'auto'}
+              onClick={() => applyTheme('auto')}
+              className={theme === 'auto' ? 'is-active' : ''}
+            >
+              auto
+            </button>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={theme === 'light'}
+              onClick={() => applyTheme('light')}
+              className={theme === 'light' ? 'is-active' : ''}
+            >
+              light
+            </button>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={theme === 'dark'}
+              onClick={() => applyTheme('dark')}
+              className={theme === 'dark' ? 'is-active' : ''}
+            >
+              dark
+            </button>
+          </div>
+        )}
       </div>
 
       {searchOpen && (
@@ -184,76 +172,91 @@ export default function HeaderControls() {
         >
           <div className="search-panel">
             <div ref={mountRef} className="pagefind-mount" />
-            <div className="search-foot">
-              <span>
-                <kbd className="kbd">↵</kbd> open
-              </span>
-              <span>
-                <kbd className="kbd">esc</kbd> close
-              </span>
-              <a href="/search/" className="search-foot-link">
-                Open dedicated search →
-              </a>
+            <div className="search-foot mono">
+              <span><kbd>↵</kbd> open</span>
+              <span><kbd>esc</kbd> close</span>
+              <a href="/search/" className="search-foot-link">Open dedicated search →</a>
             </div>
           </div>
         </div>
       )}
 
       <style>{`
-        .controls { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
-        .ctrl-btn, .ctrl-icon-label, .ctrl-select {
+        .hc {
+          position: relative;
           display: inline-flex;
           align-items: center;
-          gap: 0.5rem;
-          height: 36px;
-          padding-inline: 0.75rem;
-          background: var(--color-bg-soft);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-button);
-          color: var(--color-fg);
-          font-family: inherit;
-          font-size: 0.875rem;
+          gap: 0.625rem;
+          font-family: var(--font-sans, 'Inter Tight', system-ui, sans-serif);
+          font-size: 13px;
+          color: var(--ink-mute);
+        }
+        .hc-trigger {
+          background: transparent;
+          border: 0;
+          padding: 0.375rem 0.5rem;
+          color: var(--ink-mute);
           cursor: pointer;
+          font: inherit;
+          letter-spacing: 0.04em;
+        }
+        .hc-trigger:hover { color: var(--cobalt); }
+        .hc-trigger:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+        .hc-link {
+          color: var(--ink-mute);
           text-decoration: none;
-          transition: border-color 120ms;
+          padding: 0.375rem 0.25rem;
         }
-        .ctrl-btn:hover, .ctrl-select:hover {
-          border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border));
-        }
-        .ctrl-btn-primary { background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent); }
-        .ctrl-btn-primary:hover { color: var(--color-accent-fg); }
-        .ctrl-label { display: none; }
-        @media (min-width: 768px) { .ctrl-label { display: inline; } }
-        .ctrl-group {
-          display: flex;
-          align-items: center;
-          background: var(--color-bg-soft);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-button);
-          height: 36px;
-          padding-left: 0.625rem;
-          gap: 0.375rem;
-        }
-        .ctrl-icon-label { background: transparent; border: 0; padding: 0; height: auto; cursor: default; }
-        .ctrl-select { background: transparent; border: 0; padding-inline: 0.5rem 0.5rem; height: 100%; }
-        .ctrl-select:focus, .ctrl-btn:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-        .kbd {
-          padding: 0.125rem 0.375rem;
-          background: var(--color-bg-muted);
-          border: 1px solid var(--color-border);
-          border-radius: 0.25rem;
-          color: var(--color-fg-muted);
+        .hc-link:hover { color: var(--cobalt); }
+        .hc-kbd {
+          display: inline-block;
+          padding: 0.125rem 0.5rem;
+          border: 1px solid var(--rule);
+          color: var(--ink-mute);
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
+          font-size: 11px;
         }
-        .sr-only {
-          position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-          overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+        .hc-trigger:hover .hc-kbd { border-color: var(--cobalt); color: var(--cobalt); }
+        .hc-overflow { font-size: 16px; line-height: 1; padding: 0.25rem 0.5rem; letter-spacing: 0.1em; }
+
+        .hc-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          min-width: 180px;
+          background: var(--paper);
+          border: 1px solid var(--rule);
+          padding: 0.5rem 0;
+          z-index: 60;
+          display: flex;
+          flex-direction: column;
         }
+        .hc-menu a, .hc-menu button {
+          background: transparent;
+          border: 0;
+          padding: 0.375rem 1rem;
+          color: var(--ink);
+          font: inherit;
+          text-align: left;
+          text-decoration: none;
+          cursor: pointer;
+        }
+        .hc-menu a:hover, .hc-menu button:hover { background: var(--paper-2); color: var(--cobalt); }
+        .hc-menu .is-active { color: var(--cobalt); }
+        .hc-menu hr { height: 1px; border: 0; background: var(--rule); margin: 0.5rem 0; }
+        .hc-menu-h {
+          padding: 0 1rem 0.25rem;
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--ink-mute);
+          margin: 0;
+        }
+
         .search-backdrop {
           position: fixed; inset: 0;
-          background: color-mix(in oklab, var(--color-bg) 70%, transparent);
-          backdrop-filter: blur(8px);
+          background: color-mix(in oklab, var(--ink) 55%, transparent);
+          backdrop-filter: blur(4px);
           z-index: 100;
           display: flex;
           align-items: flex-start;
@@ -264,35 +267,31 @@ export default function HeaderControls() {
         .search-panel {
           width: 100%;
           max-width: 720px;
-          background: var(--color-bg-soft);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-card);
-          box-shadow: 0 24px 48px -12px rgba(0,0,0,0.5);
+          background: var(--paper);
+          border: 1px solid var(--rule);
+          box-shadow: 0 24px 48px -12px rgba(0,0,0,0.18);
           overflow: hidden;
-          --pagefind-ui-primary: var(--color-accent);
-          --pagefind-ui-text: var(--color-fg);
-          --pagefind-ui-background: var(--color-bg-soft);
-          --pagefind-ui-border: var(--color-border);
-          --pagefind-ui-tag: var(--color-bg-muted);
-          --pagefind-ui-border-width: 1px;
-          --pagefind-ui-border-radius: var(--radius-card);
-          --pagefind-ui-image-border-radius: var(--radius-button);
-          --pagefind-ui-image-box-ratio: 3 / 2;
-          --pagefind-ui-font: inherit;
         }
         .pagefind-mount { padding: 1rem; min-height: 320px; max-height: 70vh; overflow-y: auto; }
-        .pagefind-mount :global(.pagefind-ui__form) { margin-bottom: 1rem; }
         .search-foot {
           display: flex;
           gap: 1rem;
           padding: 0.625rem 1rem;
-          background: var(--color-bg-muted);
-          border-top: 1px solid var(--color-border);
-          color: var(--color-fg-soft);
-          font-size: 0.75rem;
+          background: var(--paper-2);
+          border-top: 1px solid var(--rule);
+          color: var(--ink-mute);
+          font-size: 11px;
         }
-        .search-foot-link { margin-left: auto; color: var(--color-fg-muted); text-decoration: none; }
-        .search-foot-link:hover { color: var(--color-fg); }
+        .search-foot kbd {
+          padding: 0.125rem 0.375rem;
+          border: 1px solid var(--rule);
+          color: var(--ink-mute);
+          font-family: var(--font-mono);
+          font-size: 10px;
+          margin-right: 0.25rem;
+        }
+        .search-foot-link { margin-left: auto; color: var(--ink-mute); text-decoration: underline; text-underline-offset: 3px; }
+        .search-foot-link:hover { color: var(--cobalt); }
       `}</style>
     </>
   )
