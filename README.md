@@ -10,22 +10,25 @@ Cloudflare. Auth + cross-site sign-in via Firebase (`oriz-app`).
 
 ## Features
 
-- **MDX content collections** with strict frontmatter schema
+- **MDX content collections** with strict frontmatter schema (two collections: legacy `blog/` for the bulk-imported corpus, and `posts/` for new spec-conformant entries)
+- **3-format feeds** at `/rss.xml`, `/atom.xml`, `/feed.json` — auto-discovered via `<FeedDiscovery />` `<link>` tags in `<head>` (Batch-12 lock)
+- **Algolia search** — `<Search />` React island with a graceful client-side fallback when env is missing (Batch-4 lock; fallback uses substring match over a static index)
+- **Family-wide MultiSearch** — `⌘K` opens a cross-site search overlay; routes the query to the picked site's own `/search/?q=`
+- **StatusBanner** — auto-shows when `status.oriz.in` reports a non-OK incident (apex-only-monitoring lock)
+- **Giscus comments** — consent-gated. The iframe doesn't load until the reader clicks "Load comments"; consent is remembered per-browser (Batch-5 + consent decision)
+- **JSON-LD** — `Article` + `BreadcrumbList` on every post page (SEO three-pillars decision)
+- **Sitemap** at `/sitemap-index.xml` via `@astrojs/sitemap`
 - **View Transitions** — smooth client-side nav between posts (Astro `ClientRouter`)
 - **KaTeX math** — `$$E=mc^2$$` in any post via `remark-math` + `rehype-katex`
 - **expressive-code** — code blocks with line numbers, language label, diff highlight, frame title
 - **Reading time** — auto-computed from post body (overridable in frontmatter)
 - **Tags / Categories / Series / Authors / Archive** — full taxonomy pages
-- **Pagefind search** — `⌘K` / `/` overlay anywhere; dedicated page at `/search/`
-- **Giscus comments** — lazy-loaded, theme-aware, env-driven (`PUBLIC_GISCUS_*`)
+- **Pagefind search** — local search overlay anywhere; dedicated page at `/search/`
 - **Bookmarks** — Firestore for signed-in users, localStorage for anon, auto-merge on sign-in
 - **Related posts** — ranked by series → tag overlap → category → recency
 - **Series navigation** — prev/next + collapsible part list
 - **TOC** — sticky on the right at ≥1024px, IntersectionObserver-driven
-- **JSON-LD** — Article + BreadcrumbList on every post
-- **RSS** at `/rss.xml` with full categories + tags
 - **PWA** — service worker via `vite-plugin-pwa` (NetworkFirst pages, SWR images/fonts), offline fallback
-- **Sitemap** at `/sitemap-index.xml`
 
 ## Routes
 
@@ -94,12 +97,21 @@ envpact.
 
 ## Writing posts
 
-Posts are MDX in `src/content/blog/`. Schema lives in `src/content.config.ts`
-(`title`, `description`, `pubDate`, `tags`, `category`, `series`, `draft`, …).
-A multi-part series is just a folder; a `<folder>/index.mdx` becomes the
-series overview.
+Two collections coexist:
 
-Math, code, callouts:
+- **`src/content/blog/`** — legacy bulk-imported corpus (200+ entries
+  ported from open-ncert). Existing routes at `/blog/*` render these.
+- **`src/content/posts/`** — new spec-conformant entries written under
+  the Batch-13 brief. Rendered at `/posts/*`. Schema (in
+  `src/content.config.ts`): `title`, `description`, `pubDate`,
+  `updatedDate?`, `heroImage?`, `tags`, `draft?`, `canonicalUrl?`,
+  `author`. **Code samples come from StackBlitz / CodePen / GitHub
+  Gist embeds** (per Batch-6 lock) — no in-MDX runnable code.
+
+Pick `posts/` for new writing. The `blog/` collection stays for legacy
+URL stability.
+
+Math, code, callouts in the legacy `blog/` collection:
 
 ```mdx
 ---

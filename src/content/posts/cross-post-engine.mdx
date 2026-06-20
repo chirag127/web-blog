@@ -1,0 +1,172 @@
+---
+title: "oriz-omnipost — designing the family cross-post engine"
+description: "How oriz-omnipost reads RSS from any site in the chirag127/oriz family and pushes new entries to dev.to, Bluesky, Buttondown, Telegra.ph, WordPress, and Reddit — with idempotency keyed on the RSS guid."
+pubDate: 2026-06-20
+author: "Chirag Singhal"
+tags: ["architecture", "rss", "syndication", "oriz-omnipost", "indexnow"]
+canonicalUrl: "https://blog.oriz.in/posts/cross-post-engine/"
+---
+
+When a new post lands here, six other places need to know about
+it: my [dev.to](https://dev.to/chirag127) profile, my Bluesky
+feed, the [Buttondown](https://buttondown.com/chirag127)
+newsletter, a Telegra.ph mirror, the WordPress.com mirror, and
+two relevant subreddits. Doing this by hand is exactly the kind
+of work that gets dropped after the third Friday in a row.
+**oriz-omnipost** is the small CLI that does it, designed
+around two boring constraints.
+
+## Constraint 1: the source is RSS, not a database
+
+Every site in the oriz family already publishes a 3-format feed
+([Batch 12 lock](https://github.com/chirag127/oriz/blob/main/knowledge/decisions/architecture/feeds-rss-atom-json.md)):
+`/rss.xml`, `/atom.xml`, `/feed.json`. omnipost reads these — it
+does **not** query the site's content collection directly.
+Three reasons:
+
+- **The CLI is a separate package** with no dependency on Astro,
+  React, or any site's build graph. It runs on a stock Node 22
+  with `xml2js` and `fetch`. This is the same property that makes
+  it usable from a GitHub Action on a schedule, on my laptop on a
+  whim, or on a Cloudflare Worker cron trigger.
+- **RSS is the canonical contract.** If the feed renders right,
+  the cross-post will. If a future site joins the family written
+  in Hugo or Eleventy, omnipost still works against it on day
+  one.
+- **Each cross-post lands with a stable canonical URL** — the
+  `<guid isPermaLink="true">` in the source RSS — which is
+  exactly what you want for SEO, AdSense, and human readers.
+
+## Constraint 2: idempotency or it's useless
+
+The CLI runs on a cadence (currently nightly via GitHub Actions).
+Most nights there's nothing new. Some nights there are five new
+posts. The engine has to repost only-once-per-destination, even
+across reruns, even when a destination has no concept of
+"external id".
+
+The data structure is a per-site, per-destination ledger keyed
+on the RSS `<guid>`:
+
+<script src="https://gist.github.com/chirag127/000000aa00aa00aa00aa00aa00aa00aa.js"></script>
+
+Concretely: a single `syndication-registry.json` file lives in
+each site's repo (you'll find one at
+`/src/content/syndication-registry.json` here). The file is the
+set of (guid, destination) pairs that have already been posted.
+omnipost reads it, diffs against the current RSS, posts the
+delta, then commits the registry update back to the source repo
+via a small GitHub App. If the commit fails, the post is rolled
+back as best we can (Buttondown drafts can be deleted; Bluesky
+posts can be deleted; some destinations are write-only and we
+just log the orphan).
+
+## The destinations, in trust order
+
+Each adapter is ~80 lines of TypeScript. The interesting
+variation isn't the API surface (most are POST a JSON body with
+a bearer token) — it's the failure modes.
+
+### dev.to
+
+Cleanest API. POST `/api/articles` with `{ article: { title,
+body_markdown, canonical_url, tags, published: true } }`. Returns
+the post URL on success; rate-limited per minute. Tags must be
+already-existing on dev.to; new tags silently dropped. Mirrors
+canonical correctly (Google never penalises).
+
+### Bluesky
+
+The `@atproto/api` package handles auth + posting. The catch:
+posts cap at 300 graphemes, so omnipost truncates to
+`{title} → {url}` if the description doesn't fit. No native
+"canonical" concept — the link card embed handles SEO.
+
+### Buttondown
+
+Markdown body, `email_type: 'public'` for the public archive.
+This is the only destination that gets the *full* post body
+(everything else gets title + link). Rate-limit is generous;
+the bottleneck is the 30-day publish-grace-period that
+Buttondown enforces for new accounts.
+
+### Telegra.ph
+
+Anonymous publishing endpoint, no auth. Markdown is converted
+to Telegra.ph's node-tree format via a small
+markdown-to-nodes converter. Useful as a dead-tree mirror
+that survives me forgetting to renew anything.
+
+### WordPress.com
+
+A mirror at `chirag127.wordpress.com` exists for the same reason
+Telegra.ph does — fallback hosting that I'm not paying for. The
+[WordPress.com REST API](https://developer.wordpress.com/docs/api/)
+is slightly more ceremonial than dev.to but works the same way.
+
+### Reddit
+
+The most fragile destination. Reddit's API is auth-heavy
+(client_id + client_secret + user password — dance via
+`grant_type=password`), per-subreddit rules vary, and many
+subreddits ban "promotional" posts on sight. omnipost's Reddit
+adapter only posts to subreddits I moderate or where I've
+hand-checked the rules. If the post is removed within an hour
+(detected via the next omnipost run), the registry entry is
+flipped to `removed` and a Slack DM goes out.
+
+## IndexNow, while we're here
+
+[IndexNow](https://www.indexnow.org/) is the protocol Bing,
+Yandex, Seznam, and Naver implement to learn about new URLs in
+milliseconds instead of waiting for the next crawl. omnipost
+fires a single `POST` to the IndexNow endpoint after every
+successful round of cross-posts, with the list of new canonical
+URLs. Cost: one HTTP request. Benefit: Bing has the URL indexed
+before the dev.to mirror has finished its own SEO crawl.
+
+This is one of the
+[three SEO pillars](https://github.com/chirag127/oriz/blob/main/knowledge/decisions/architecture/seo-three-pillars.md)
+I lock for every family site, and it's the only one that needs
+runtime infra (the others — sitemap and JSON-LD — are pure
+build-time).
+
+## Running it locally
+
+If you're cloning a fork of oriz-omnipost and want to dry-run
+against this blog's RSS without actually posting, the CLI ships
+a `--dry-run` flag that fetches, diffs, and prints the actions
+it _would_ take. The full source is here, embedded so it stays
+current with what's deployed:
+
+<iframe
+  src="https://stackblitz.com/edit/oriz-omnipost-cli?embed=1&file=src/cli.ts&hideExplorer=1"
+  style={{ width: '100%', height: '480px', border: 0, borderRadius: '0.5rem' }}
+  title="oriz-omnipost CLI source"
+  loading="lazy"
+  allow="clipboard-write"
+/>
+
+## What I'd change if I started over
+
+Two things, both about scope:
+
+- **A pluggable destination interface from day one.** I knew
+  there'd be six destinations and wrote six bespoke adapters with
+  ~30% shared code. Refactoring to a common `interface
+  Destination { id; post(entry): Promise<PostResult>; delete?
+  (id): Promise<void> }` is on the to-do list.
+- **Webhook trigger instead of cron.** Cloudflare Pages emits a
+  deploy webhook; that's a much tighter feedback loop than a
+  nightly cron. The cron stays as a belt-and-braces backup.
+
+Both of these are tracked in the omnipost
+[issue tracker](https://github.com/chirag127/oriz-omnipost/issues)
+if you want to follow along.
+
+## tl;dr
+
+A CLI that reads RSS, diffs against a per-destination ledger,
+posts the delta, and updates the ledger. The whole thing is ~600
+lines of TypeScript across six adapters and a small core. The
+boringness is the feature.

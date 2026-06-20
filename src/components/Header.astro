@@ -17,12 +17,18 @@
  */
 import Wordmark from '~/components/Wordmark.astro'
 import HeaderControls from '~/components/HeaderControls.tsx'
+import MultiSearch from '~/components/MultiSearch.tsx'
+import StatusBanner from '~/components/StatusBanner.astro'
 ---
 
+<StatusBanner />
 <header class="site-header" transition:persist="site-header">
   <div class="container-page header-inner">
     <div class="brand">
       <Wordmark subtitle="blog" size={22} href="/" />
+    </div>
+    <div class="header-multisearch">
+      <MultiSearch client:idle />
     </div>
     <div class="header-controls-mount">
       <HeaderControls client:idle />
@@ -56,5 +62,13 @@ import HeaderControls from '~/components/HeaderControls.tsx'
     margin-left: auto;
     display: inline-flex;
     align-items: center;
+  }
+  .header-multisearch {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+  }
+  .header-multisearch + .header-controls-mount {
+    margin-left: 0.75rem;
   }
 </style>

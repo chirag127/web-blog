@@ -1,0 +1,27 @@
+---
+/**
+ * <FeedDiscovery /> — drops `<link rel="alternate">` tags into the
+ * document head so RSS readers, browser extensions, and IndexNow-style
+ * crawlers can auto-discover all three feed formats.
+ *
+ * Per Batch-12 lock + the SEO three-pillars decision:
+ *   - /rss.xml   (RSS 2.0)
+ *   - /atom.xml  (Atom 1.0)
+ *   - /feed.json (JSON Feed 1.1)
+ *
+ * Rendered with `slot="head"` from a page; or directly inside a layout
+ * <head> via `<FeedDiscovery />`.
+ */
+import { SITE_CONFIG } from '~/lib/config'
+
+interface Props {
+  /** Optional title prefix for the link `title` attribute. Defaults to SITE_CONFIG.title. */
+  title?: string
+}
+
+const { title = SITE_CONFIG.title } = Astro.props as Props
+---
+
+<link rel="alternate" type="application/rss+xml" title={`${title} — RSS`} href="/rss.xml" />
+<link rel="alternate" type="application/atom+xml" title={`${title} — Atom`} href="/atom.xml" />
+<link rel="alternate" type="application/feed+json" title={`${title} — JSON Feed`} href="/feed.json" />

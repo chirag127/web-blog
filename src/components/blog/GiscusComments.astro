@@ -1,12 +1,16 @@
 ---
 /**
- * GiscusComments — lazy-mounts the Giscus iframe via the official
- * client script (https://giscus.app/client.js) once the placeholder
- * scrolls into view. The four IDs come from PUBLIC_GISCUS_* env vars
- * resolved in ~/lib/config.
+ * GiscusComments — consent-gated mount of the Giscus iframe.
  *
- * If repoId / categoryId are blank (e.g. dev), we render an inline
- * notice instead of a broken iframe.
+ * Per Batch-5 (Giscus = comments) + the consent decision: the iframe
+ * does NOT load until the reader explicitly clicks "Load comments".
+ * No third-party JS, no cookies, no GitHub-API calls happen until
+ * consent is granted. Once granted, the click is remembered in
+ * localStorage so the user isn't asked again on subsequent posts.
+ *
+ * The four IDs come from PUBLIC_GISCUS_* env vars resolved in
+ * ~/lib/config. If repoId / categoryId are blank (e.g. dev), we
+ * render an inline notice instead of a broken iframe.
  */
 import { SITE_CONFIG } from '~/lib/config'
 
@@ -28,7 +32,12 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
       data-giscus-reactions={g.reactionsEnabled ? '1' : '0'}
       data-giscus-input-position={g.inputPosition}
     >
-      <p class="comments-placeholder">Loading comments…</p>
+      <button id="giscus-consent" type="button" class="comments-consent">
+        Load comments
+        <span class="comments-consent-hint">
+          Loads <a href="https://giscus.app">giscus</a> + a GitHub Discussions iframe.
+        </span>
+      </button>
     </div>
   ) : (
     <p class="comments-disabled">
@@ -39,6 +48,7 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
 </section>
 
 <script>
+  const CONSENT_KEY = 'oriz:blog:giscus-consent'
   const mount = document.getElementById('giscus-mount')
   if (mount) {
     const init = () => {
@@ -68,22 +78,25 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
       mount.replaceChildren(script)
     }
 
-    if ('IntersectionObserver' in window) {
-      const io = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              init()
-              io.disconnect()
-              break
-            }
-          }
-        },
-        { rootMargin: '200px' },
-      )
-      io.observe(mount)
-    } else {
+    const consentBtn = document.getElementById('giscus-consent')
+    const grantConsent = () => {
+      try {
+        localStorage.setItem(CONSENT_KEY, '1')
+      } catch {}
       init()
+    }
+
+    // If consent was previously granted (per the consent decision —
+    // remember it so the user isn't asked on every post), auto-load.
+    let alreadyConsented = false
+    try {
+      alreadyConsented = localStorage.getItem(CONSENT_KEY) === '1'
+    } catch {}
+
+    if (alreadyConsented) {
+      init()
+    } else if (consentBtn) {
+      consentBtn.addEventListener('click', grantConsent)
     }
   }
 </script>
@@ -97,6 +110,27 @@ const enabled = g.repoId.length > 0 && g.categoryId.length > 0
     margin: 0 0 1rem;
   }
   .comments-placeholder { color: var(--color-fg-soft); font-size: 0.875rem; margin: 0; }
+  .comments-consent {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    padding: 0.625rem 1rem;
+    background: var(--color-bg-soft, #f7f5f0);
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: var(--radius-card, 0.5rem);
+    color: var(--color-fg, #222);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .comments-consent:hover { border-color: var(--cobalt, #1f4ed8); color: var(--cobalt, #1f4ed8); }
+  .comments-consent-hint {
+    font-size: 0.75rem;
+    color: var(--color-fg-muted, #666);
+    font-weight: 400;
+  }
+  .comments-consent-hint a { color: inherit; text-decoration: underline; }
   .comments-disabled {
     padding: 1rem 1.25rem;
     background: var(--color-bg-soft);

@@ -1,0 +1,72 @@
+---
+/**
+ * <StatusBanner /> — slim banner that shows in the BaseLayout header
+ * when status.oriz.in reports a non-OK incident.
+ *
+ * Per the apex-only-monitoring lock, status.oriz.in is the single
+ * source of truth for family uptime. This banner reads its public
+ * JSON endpoint (cached at build-time) and only renders when there's
+ * an active incident; otherwise it's a no-op (zero CSS, zero JS).
+ *
+ * Intentionally simple — fetches happen on hydration, not at build.
+ * If the fetch fails the banner stays hidden (fail closed).
+ */
+---
+
+<div id="oriz-status-banner" hidden></div>
+
+<script>
+  /**
+   * Polls status.oriz.in for active incidents. Endpoint contract:
+   *   GET https://status.oriz.in/api/incidents
+   *   → { active: { title: string; severity: 'minor'|'major'; url: string }[] }
+   *
+   * Fail closed: any error → banner stays hidden.
+   */
+  ;(async () => {
+    const el = document.getElementById('oriz-status-banner')
+    if (!el) return
+    try {
+      const res = await fetch('https://status.oriz.in/api/incidents', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      const active = Array.isArray(data?.active) ? data.active : []
+      if (active.length === 0) return
+      const top = active[0]
+      el.removeAttribute('hidden')
+      el.setAttribute('role', 'status')
+      el.setAttribute('data-severity', top.severity ?? 'minor')
+      el.innerHTML =
+        `<a href="${top.url ?? 'https://status.oriz.in'}" target="_blank" rel="noopener">` +
+        `<strong>${top.severity === 'major' ? 'Incident' : 'Notice'}:</strong> ${top.title}` +
+        `</a>`
+    } catch {
+      /* fail closed */
+    }
+  })()
+</script>
+
+<style>
+  #oriz-status-banner {
+    --status-bg: #fff7e6;
+    --status-fg: #7a5300;
+    --status-border: #f3c97a;
+    background: var(--status-bg);
+    color: var(--status-fg);
+    border-bottom: 1px solid var(--status-border);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    text-align: center;
+    font-family: var(--font-sans, system-ui, sans-serif);
+  }
+  #oriz-status-banner[data-severity='major'] {
+    --status-bg: #fde2e2;
+    --status-fg: #8a1c1c;
+    --status-border: #e89a9a;
+  }
+  #oriz-status-banner a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+</style>

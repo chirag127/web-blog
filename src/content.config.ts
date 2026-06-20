@@ -75,6 +75,32 @@ const blog = defineCollection({
   }),
 })
 
+/**
+ * `posts` collection — slimmer schema introduced in the Batch-13 spec.
+ * Coexists with `blog` (legacy bulk-import collection ported from
+ * open-ncert). New posts written to spec land here; `blog/` keeps the
+ * existing 200+ entries intact.
+ *
+ * Frontmatter contract (per oriz-blog Batch-13 brief):
+ *   title, description, pubDate, author, tags, canonicalUrl  required-ish
+ *   updatedDate, heroImage, draft                            optional
+ */
+const posts = defineCollection({
+  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    pubDate: z.coerce.date(),
+    updatedDate: z.coerce.date().optional(),
+    heroImage: z.string().optional(),
+    tags: z.array(z.string()).default([]),
+    draft: z.boolean().default(false),
+    canonicalUrl: z.string().url().optional(),
+    author: z.string().default('Chirag Singhal'),
+  }),
+})
+
 export const collections = {
   blog,
+  posts,
 }

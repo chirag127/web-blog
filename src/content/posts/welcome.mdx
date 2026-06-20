@@ -1,0 +1,75 @@
+---
+title: "Welcome to oriz-blog"
+description: "An introduction to the blog at blog.oriz.in — what you'll find here, how it's built, and why it lives in the chirag127/oriz family."
+pubDate: 2026-06-20
+author: "Chirag Singhal"
+tags: ["meta", "intro", "oriz"]
+canonicalUrl: "https://blog.oriz.in/posts/welcome/"
+---
+
+Welcome to **oriz-blog** — the long-form writing arm of the
+[chirag127/oriz](https://github.com/chirag127/oriz) family of static
+sites. Most of what I publish here is engineering work I'd otherwise
+forget: notes on shipping small things, debugging stories with the
+fix written down so I don't repeat the search, and the occasional
+opinionated take on a tool I've used long enough to have one.
+
+## What you'll find
+
+Three buckets, roughly:
+
+- **Engineering notebooks.** Architecture decisions, debugging
+  walk-throughs, and the kind of "I just spent four hours on this"
+  post that's mostly for me but might save you the same four hours.
+- **Open-source ships.** Whenever I push a new oriz-family site
+  (eleven of them and counting), the cross-post engine
+  ([oriz-omnipost](/posts/cross-post-engine/)) pings here and the
+  newsletter and dev.to and Bluesky in one go.
+- **Books and finance.** The non-engineering side of my
+  reading. Less frequent, more digested.
+
+Every post lives as an `.mdx` file in this repo's
+`src/content/posts/` directory — no headless CMS, no admin login,
+no second source of truth. See the
+[markdown-in-repo-only decision](https://github.com/chirag127/oriz/blob/main/knowledge/decisions/architecture/cms-markdown-in-repo-only.md)
+for the why.
+
+## Code samples come from elsewhere
+
+Per the family-wide
+[code-embed lock (Batch 6)](https://github.com/chirag127/oriz/tree/main/knowledge/decisions),
+runnable code goes into a **StackBlitz** or **CodePen** project, or
+a **GitHub Gist** for non-runnable snippets, and gets embedded back
+into the post. This blog post embed pattern keeps the MDX file
+short, the runtime example always-up-to-date, and the JS bundle
+out of the static build.
+
+A taste:
+
+<iframe
+  src="https://stackblitz.com/edit/oriz-blog-welcome?embed=1&file=src/index.ts&hideExplorer=1"
+  style={{ width: '100%', height: '420px', border: 0, borderRadius: '0.5rem' }}
+  title="oriz-blog welcome — runnable example"
+  loading="lazy"
+  allow="clipboard-write"
+/>
+
+For non-runnable snippets, a Gist:
+
+<script src="https://gist.github.com/chirag127/0000000000000000000000000000.js"></script>
+
+## How to read
+
+The chrome here is intentionally minimal. The header has a search
+box that hits the family-wide MultiSearch (looks across every site
+in oriz, not just this blog). The footer has the three feeds —
+[`/rss.xml`](/rss.xml), [`/atom.xml`](/atom.xml),
+[`/feed.json`](/feed.json) — pick whichever your reader prefers.
+Comments are at the bottom of each post, gated behind a "Load
+comments" click so the iframe doesn't ship until you ask for it.
+
+If something here helps you, the best thank-you is a star on
+[chirag127/oriz](https://github.com/chirag127/oriz) or a reply on
+[Bluesky](https://bsky.app/profile/chirag127.bsky.social).
+
+— Chirag
