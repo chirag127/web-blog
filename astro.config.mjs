@@ -39,6 +39,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // astro-expressive-code MUST be before mdx so its rehype hooks land in MDX too.
 export default defineConfig({
   site: 'https://blog.oriz.in',
+  base: process.env.PUBLIC_BASE_PATH ?? '/',
   output: 'static',
   trailingSlash: 'ignore',
   build: { format: 'directory' },
