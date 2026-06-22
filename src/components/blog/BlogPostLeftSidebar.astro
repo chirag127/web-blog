@@ -1,0 +1,182 @@
+---
+/**
+ * BlogPostLeftSidebar — collapsible left sidebar shown on post pages.
+ *
+ * Hamburger-toggled; default-open at ≥1280px, hidden at <1024px (mobile uses
+ * the floating TOC drawer instead).
+ *
+ * Content depends on whether the current post belongs to a series:
+ *   - In-series: jump-list of other posts in the series (current highlighted),
+ *                browse categories link, recent posts (5)
+ *   - Stand-alone: recent posts (10), tag cloud (top 10), browse links
+ *
+ * Reuses `getPostsInSeries`, `getPublishedPosts`, `getTagsWithCounts` from
+ * ~/lib/blog so no duplication.
+ */
+import type { CollectionEntry } from 'astro:content'
+import {
+  formatPostDate,
+  getPostsInSeries,
+  getPublishedPosts,
+  getTagsWithCounts,
+  slugifyTag,
+} from '~/lib/blog'
+
+export interface Props {
+  post: CollectionEntry<'blog'>
+}
+
+const { post } = Astro.props
+
+const allPosts = await getPublishedPosts()
+
+let seriesPosts: typeof allPosts = []
+if (post.data.series) {
+  seriesPosts = await getPostsInSeries(post.data.series)
+}
+
+const isSeries = seriesPosts.length > 1
+const recent = allPosts
+  .filter((p) => p.id !== post.id)
+  .slice(0, isSeries ? 5 : 10)
+
+let topTags: { tag: string; count: number }[] = []
+if (!isSeries) {
+  const tagsAll = await getTagsWithCounts()
+  topTags = tagsAll.slice(0, 10)
+}
+---
+
+<aside class="lsb" aria-label="Post sidebar">
+  {isSeries && (
+    <section class="lsb-sec">
+      <h3 class="lsb-h">In this series</h3>
+      <p class="lsb-sub mono">{post.data.series}</p>
+      <ol class="lsb-series">
+        {seriesPosts.map((p, i) => (
+          <li class:list={[{ 'is-current': p.id === post.id }]}>
+            <span class="lsb-num">{p.data.part ?? i + 1}.</span>
+            {p.id === post.id ? (
+              <span class="lsb-cur" aria-current="page">{p.data.title}</span>
+            ) : (
+              <a href={`/blog/${p.id}/`}>{p.data.title}</a>
+            )}
+            <time datetime={p.data.pubDate.toISOString()}>{formatPostDate(p.data.pubDate)}</time>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )}
+
+  <section class="lsb-sec">
+    <h3 class="lsb-h">Recent posts</h3>
+    <ul class="lsb-list">
+      {recent.map((p) => (
+        <li><a href={`/blog/${p.id}/`}>{p.data.title}</a></li>
+      ))}
+    </ul>
+  </section>
+
+  {!isSeries && topTags.length > 0 && (
+    <section class="lsb-sec">
+      <h3 class="lsb-h">Top tags</h3>
+      <ul class="lsb-tags">
+        {topTags.map(({ tag, count }) => (
+          <li>
+            <a href={`/tags/${slugifyTag(tag)}/`}>#{tag} <span class="lsb-tag-n">{count}</span></a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  <section class="lsb-sec">
+    <h3 class="lsb-h">Browse</h3>
+    <ul class="lsb-list">
+      <li><a href="/categories/">All categories</a></li>
+      <li><a href="/tags/">All tags</a></li>
+      <li><a href="/archive/">Archive</a></li>
+    </ul>
+  </section>
+</aside>
+
+<style>
+  .lsb {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 0.5rem 0 1rem;
+  }
+  .lsb-sec { margin-bottom: 1.75rem; }
+  .lsb-h {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-mute);
+    margin: 0 0 0.625rem;
+    font-weight: 500;
+  }
+  .lsb-sub {
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin: -0.375rem 0 0.625rem;
+  }
+  .lsb-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .lsb-list a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .lsb-list a:hover { color: var(--cobalt); border-bottom-color: var(--cobalt); }
+
+  .lsb-series { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.625rem; }
+  .lsb-series li {
+    display: grid;
+    grid-template-columns: 1.5rem 1fr;
+    gap: 0.25rem 0.375rem;
+    align-items: baseline;
+  }
+  .lsb-series li.is-current {
+    background: color-mix(in oklab, var(--cobalt) 8%, transparent);
+    border-left: 2px solid var(--cobalt);
+    padding: 0.375rem 0.5rem;
+    margin-left: -0.5rem;
+  }
+  .lsb-num { color: var(--ink-mute); font-family: var(--font-mono); font-size: 12px; }
+  .lsb-series a {
+    color: var(--ink);
+    text-decoration: none;
+    grid-column: 2;
+  }
+  .lsb-series a:hover { color: var(--cobalt); }
+  .lsb-cur {
+    color: var(--cobalt);
+    font-weight: 600;
+    grid-column: 2;
+  }
+  .lsb-series time {
+    grid-column: 2;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+  }
+
+  .lsb-tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+  .lsb-tags a {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--rule);
+    color: var(--ink-mute);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-decoration: none;
+  }
+  .lsb-tags a:hover { color: var(--cobalt); border-color: var(--cobalt); }
+  .lsb-tag-n {
+    color: var(--ink-mute);
+    margin-left: 0.25rem;
+    font-size: 10px;
+  }
+</style>

@@ -1,16 +1,23 @@
 ---
 /**
- * /blog/[slug] — single blog post (v2 design).
+ * /blog/[slug] — single blog post (v2 design, 3-column re-grilled 2026-06-22).
  *
- * Responsive layout (2026-06-22):
- *   - Hero/header full-width above a 2-col grid.
- *   - Desktop (≥1024px): content max-width 720px + right sticky TOC rail (240px).
- *     Left global Sidebar is suppressed via hideSidebar on BaseLayout.
- *   - Mobile/tablet (<1024px): single-column content + a floating "Contents"
- *     FAB that opens a vaul bottom-sheet TOC drawer.
- *   - Series spine: inline in the meta row + in the right rail on desktop.
- *   - Fraunces SOFT 100 cobalt drop-cap on the first paragraph.
- *   - NO floating share buttons, NO related-posts grid in body.
+ * Responsive layout:
+ *   - Mobile/tablet <1024px: single-column content + floating bottom-right
+ *     "Contents" FAB that opens a vaul bottom-sheet TOC drawer.
+ *   - Tablet/laptop ≥1024px: 2-col (content max-width 720px + right sticky
+ *     TOC rail, 240px). Global Sidebar suppressed via hideSidebar on
+ *     BaseLayout. Left post-sidebar still hidden at this breakpoint.
+ *   - Desktop ≥1280px: 3-col (left collapsible BlogPostLeftSidebar + content
+ *     + right TOC). Left default OPEN; hamburger toggles + persists.
+ *
+ * In-series extras:
+ *   - Series jump-list (SeriesJumpList) at the bottom of the post body,
+ *     above SeriesNav prev/next.
+ *   - Series jump-list ALSO rendered inside BlogPostLeftSidebar.
+ *
+ * Series spine: inline in the meta row + in the right rail on desktop.
+ * Drop-cap: Source Serif 4 cobalt rust, first paragraph (in blog-prose.css).
  */
 import type { GetStaticPaths } from 'astro'
 import { type CollectionEntry, render } from 'astro:content'
@@ -21,6 +28,8 @@ import SeriesSpine from '~/components/SeriesSpine.astro'
 import TableOfContents from '~/components/blog/TableOfContents.astro'
 import MobileTocDrawer from '~/components/MobileTocDrawer.tsx'
 import BookmarkButton from '~/components/blog/BookmarkButton.tsx'
+import BlogPostLeftSidebar from '~/components/blog/BlogPostLeftSidebar.astro'
+import SeriesJumpList from '~/components/blog/SeriesJumpList.astro'
 import {
   formatPostDate,
   getPostsInSeries,
@@ -174,7 +183,23 @@ const breadcrumbSchema = {
       </div>
     </header>
 
-    <div class="post-grid">
+    <div class="post-grid" data-lsb-grid>
+      <aside class="post-lsb" data-lsb aria-label="Post sidebar">
+        <button
+          type="button"
+          class="lsb-toggle"
+          aria-label="Toggle sidebar"
+          aria-expanded="true"
+          data-lsb-toggle
+        >
+          <span class="lsb-toggle-icon" aria-hidden="true">≡</span>
+          <span class="lsb-toggle-label">Sidebar</span>
+        </button>
+        <div class="lsb-panel" data-lsb-panel>
+          <BlogPostLeftSidebar post={post} />
+        </div>
+      </aside>
+
       <div class="post-main">
         {post.data.series && seriesPosts.length > 1 && (
           <SeriesNav post={post} allInSeries={seriesPosts} />
@@ -192,6 +217,10 @@ const breadcrumbSchema = {
               </li>
             ))}
           </ul>
+        )}
+
+        {post.data.series && seriesPosts.length > 1 && (
+          <SeriesJumpList current={post} allInSeries={seriesPosts} />
         )}
 
         <div class="post-comments">
@@ -240,6 +269,36 @@ const breadcrumbSchema = {
       localStorage.setItem(KEY, JSON.stringify(filtered.slice(0, 10)))
     } catch {}
   </script>
+
+  <script is:inline>
+    /** Left-sidebar hamburger toggle.
+     *  Default open ≥1280px (handled in CSS), user state persisted in
+     *  localStorage('oriz:blog:lsb') so it survives navigations. */
+    function initLsb() {
+      const wrap = document.querySelector('[data-lsb]')
+      const toggle = document.querySelector('[data-lsb-toggle]')
+      if (!wrap || !toggle) return
+      const KEY = 'oriz:blog:lsb'
+      const stored = localStorage.getItem(KEY)
+      const initialOpen = stored == null ? true : stored === '1'
+      const apply = function (open) {
+        wrap.dataset.open = open ? '1' : '0'
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false')
+      }
+      apply(initialOpen)
+      toggle.addEventListener('click', function () {
+        const open = wrap.dataset.open !== '1'
+        apply(open)
+        localStorage.setItem(KEY, open ? '1' : '0')
+      })
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initLsb)
+    } else {
+      initLsb()
+    }
+    document.addEventListener('astro:page-load', initLsb)
+  </script>
 </BaseLayout>
 
 <style>
@@ -248,7 +307,7 @@ const breadcrumbSchema = {
      rail) on desktop, single-column on mobile. The mobile FAB + vaul
      drawer (rendered as a React island) takes over for navigation. */
   .post-shell {
-    max-width: 1100px;
+    max-width: 1280px;
     margin-inline: auto;
     padding-inline: clamp(1rem, 4vw, 2rem);
     padding-block: 2.5rem 4rem;
@@ -277,7 +336,10 @@ const breadcrumbSchema = {
   }
 
   .post-rail { display: none; }
+  .post-lsb { display: none; }
 
+  /* ≥1024px: 2-col (content + right TOC). Left sidebar hidden at this
+     breakpoint; user gets it back at ≥1280px (default-open). */
   @media (min-width: 1024px) {
     .post-grid {
       grid-template-columns: minmax(0, 720px) 240px;
@@ -294,6 +356,58 @@ const breadcrumbSchema = {
       padding-top: 0.25rem;
     }
   }
+
+  /* ≥1280px: 3-col with left collapsible sidebar default OPEN. */
+  @media (min-width: 1280px) {
+    .post-grid {
+      grid-template-columns: 240px minmax(0, 720px) 240px;
+      gap: 2.5rem;
+      justify-content: center;
+    }
+    .post-lsb {
+      display: block;
+      position: sticky;
+      top: 80px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      align-self: start;
+    }
+    /* When user collapses, shrink to just the toggle button. */
+    .post-grid:has([data-lsb][data-open='0']) {
+      grid-template-columns: 56px minmax(0, 720px) 240px;
+    }
+  }
+
+  /* Sidebar toggle + collapsible panel. */
+  .lsb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.625rem;
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .lsb-toggle:hover { border-color: var(--cobalt); color: var(--cobalt); }
+  .lsb-toggle-icon { font-size: 14px; line-height: 1; }
+  .lsb-panel {
+    overflow: hidden;
+    transition: max-height 240ms ease, opacity 200ms ease;
+    max-height: 5000px;
+    opacity: 1;
+  }
+  .post-lsb[data-open='0'] .lsb-panel {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .post-lsb[data-open='0'] .lsb-toggle-label { display: none; }
 
   .rail-h {
     font-family: var(--font-mono);

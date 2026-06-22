@@ -1,0 +1,156 @@
+---
+/**
+ * SeriesJumpList — "More in this series" block.
+ *
+ * Renders inside an in-series post body, between the post tags and the
+ * SeriesNav prev/next controls. Sorts by `seriesOrder` if present, else by
+ * `part`, else by `pubDate`. Highlights the current post ("you are here").
+ *
+ * SeriesNav already has a collapsible all-parts list; this is the
+ * always-expanded block the user re-grilled for.
+ */
+import type { CollectionEntry } from 'astro:content'
+import { formatPostDate } from '~/lib/blog'
+
+export interface Props {
+  current: CollectionEntry<'blog'>
+  allInSeries: CollectionEntry<'blog'>[]
+}
+
+const { current, allInSeries } = Astro.props
+
+const orderKey = (p: CollectionEntry<'blog'>): number => {
+  const so = p.data.seriesOrder
+  if (typeof so === 'number') return so
+  if (typeof so === 'string') {
+    const n = Number.parseInt(so, 10)
+    if (!Number.isNaN(n)) return n
+  }
+  const part = p.data.part
+  if (typeof part === 'number') return part + 1000
+  if (typeof part === 'string') {
+    const n = Number.parseInt(part, 10)
+    if (!Number.isNaN(n)) return n + 1000
+  }
+  return Number.POSITIVE_INFINITY
+}
+
+const ordered = [...allInSeries].sort((a, b) => {
+  const ka = orderKey(a)
+  const kb = orderKey(b)
+  if (ka !== kb) return ka - kb
+  return a.data.pubDate.valueOf() - b.data.pubDate.valueOf()
+})
+---
+
+{ordered.length > 1 && (
+  <aside class="sjl" aria-labelledby="sjl-h">
+    <h2 id="sjl-h" class="sjl-h">
+      <span class="sjl-eyebrow mono">Series</span>
+      More in <em>"{current.data.series}"</em>
+    </h2>
+    <ol class="sjl-list">
+      {ordered.map((p, i) => (
+        <li class:list={[{ 'is-current': p.id === current.id }]}>
+          <span class="sjl-num mono">{p.data.seriesOrder ?? p.data.part ?? i + 1}.</span>
+          <div class="sjl-body">
+            {p.id === current.id ? (
+              <span class="sjl-title sjl-cur" aria-current="page">{p.data.title}</span>
+            ) : (
+              <a class="sjl-title" href={`/blog/${p.id}/`}>{p.data.title}</a>
+            )}
+            <time class="sjl-date mono" datetime={p.data.pubDate.toISOString()}>
+              {formatPostDate(p.data.pubDate)}
+            </time>
+          </div>
+          {p.id === current.id && (
+            <span class="sjl-tag mono" aria-hidden="true">you are here</span>
+          )}
+        </li>
+      ))}
+    </ol>
+  </aside>
+)}
+
+<style>
+  .sjl {
+    max-width: 66ch;
+    margin: 3rem auto 1.5rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+  }
+  .sjl-h {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.125rem;
+    line-height: 1.3;
+    color: var(--ink);
+    margin: 0 0 1rem;
+  }
+  .sjl-h em { font-style: italic; color: var(--cobalt); }
+  .sjl-eyebrow {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-mute);
+    margin-bottom: 0.375rem;
+    font-weight: 500;
+  }
+  .sjl-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sjl-list > li {
+    display: grid;
+    grid-template-columns: 2rem 1fr auto;
+    gap: 0.5rem 0.625rem;
+    align-items: baseline;
+    padding: 0.625rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .sjl-list > li:first-child { border-top: 0; }
+  .sjl-list > li.is-current {
+    background: color-mix(in oklab, var(--cobalt) 6%, transparent);
+    margin: 0 -0.5rem;
+    padding: 0.625rem 0.5rem;
+    border-left: 2px solid var(--cobalt);
+  }
+  .sjl-num {
+    color: var(--ink-mute);
+    font-size: 12px;
+  }
+  .sjl-body { display: flex; flex-direction: column; gap: 0.125rem; }
+  .sjl-title {
+    color: var(--ink);
+    text-decoration: none;
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+  .sjl-title:hover {
+    color: var(--cobalt);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--cobalt) 40%, transparent);
+    text-underline-offset: 3px;
+  }
+  .sjl-cur { color: var(--cobalt); font-weight: 600; }
+  .sjl-date {
+    color: var(--ink-mute);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sjl-tag {
+    color: var(--cobalt);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    align-self: center;
+  }
+</style>
