@@ -1,40 +1,36 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro'
+/*
+ * /pricing — redirect to oriz.in/pricing.
+ *
+ * Per the Razorpay single-domain rule (knowledge/decisions/architecture/
+ * billing-webhook-cf-pages-function.md + user mandate 2026-06-22), all
+ * checkout flows live on oriz.in/pricing. This app's /pricing route
+ * preserves discoverability but bounces visitors to the canonical
+ * pricing surface.
+ *
+ * In dev (no oriz.in running), we render a brief notice with a link
+ * back to the local hub instead of bouncing into a black hole.
+ */
+const fromSlug = 'pages-blog'
+const targetUrl = `https://oriz.in/pricing?from=${fromSlug}`
+
+if (import.meta.env.PROD) {
+  return Astro.redirect(targetUrl, 302)
+}
 ---
 
-<BaseLayout
-  title="Pricing — Blog"
-  description="The oriz blog is free to read. No paywall, no subscription required."
-  hideSidebar={true}
->
-  <header class="page-head">
-    <p class="eyebrow"><a href="/">Blog</a> / Pricing</p>
-    <h1>Pricing</h1>
-  </header>
-
-  <article class="prose">
-    <p class="lede">
-      Reading the oriz blog is free. There is no paywall, no subscription,
-      and no premium tier.
-    </p>
-
-    <h2>What's free</h2>
-    <p>
-      All posts, all archives, all feeds (RSS, Atom, JSON). The newsletter
-      (when it launches) will be free at no charge. The full content is open
-      source under the repo's chosen license.
-    </p>
-
-    <h2>How this is sustainable</h2>
-    <p>
-      The blog runs on free-tier infrastructure (Cloudflare Pages) and the
-      author writes for the long-tail benefit of the oriz family of sites,
-      not for ad revenue. If you want to support the work, the best thing
-      you can do is share a post with one other person.
-    </p>
-
-    <p>
-      Questions: <a href="/contact/">contact</a>.
-    </p>
-  </article>
-</BaseLayout>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pricing — redirected to oriz.in</title>
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="refresh" content={`0;url=${targetUrl}`} />
+  </head>
+  <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1.5rem; line-height: 1.6;">
+    <h1>Pricing lives on oriz.in</h1>
+    <p>All subscriptions across the Oriz family are managed at <a href={targetUrl}>{targetUrl}</a>.</p>
+    <p>If you aren't redirected automatically, click the link above.</p>
+  </body>
+</html>
