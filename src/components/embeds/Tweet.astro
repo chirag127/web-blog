@@ -1,0 +1,52 @@
+---
+// TODO: move to @chirag127/astro-chrome/embeds in v0.1.6
+/**
+ * <Tweet id="..." user="..." /> — lazy Twitter/X embed.
+ *
+ * Renders the standard <blockquote class="twitter-tweet"> and lazy-loads
+ * the widgets.js script the first time the user scrolls past it.
+ */
+interface Props {
+  id: string
+  user: string
+}
+const { id, user } = Astro.props as Props
+const permalink = `https://twitter.com/${user}/status/${id}`
+---
+
+<blockquote class="twitter-tweet" data-dnt="true">
+  <a href={permalink}>View tweet on Twitter / X</a>
+</blockquote>
+
+<script>
+  // Lazy-load widgets.js once, when the first tweet enters the viewport.
+  const SRC = 'https://platform.twitter.com/widgets.js'
+  const tweets = document.querySelectorAll('blockquote.twitter-tweet')
+  if (tweets.length) {
+    const loadOnce = () => {
+      if (document.querySelector(`script[src="${SRC}"]`)) return
+      const s = document.createElement('script')
+      s.src = SRC
+      s.async = true
+      s.charset = 'utf-8'
+      document.body.appendChild(s)
+    }
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              loadOnce()
+              io.disconnect()
+              break
+            }
+          }
+        },
+        { rootMargin: '200px' },
+      )
+      tweets.forEach((t) => io.observe(t))
+    } else {
+      loadOnce()
+    }
+  }
+</script>

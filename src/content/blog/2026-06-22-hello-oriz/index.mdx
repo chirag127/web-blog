@@ -1,0 +1,75 @@
+---
+title: 'Hello, Oriz'
+description: 'The first post on blog.oriz.in — what Oriz is, why it exists, and what to expect from this blog.'
+pubDate: 2026-06-22
+heroImage: '/og-default.png'
+category: 'Meta'
+series: 'getting-started'
+part: 1
+tags: ['oriz', 'meta']
+author: 'Chirag Singhal'
+---
+
+import YouTube from '~/components/embeds/YouTube.astro'
+
+# Hello, Oriz
+
+This is the first post on `blog.oriz.in`. It might as well be the README for the
+blog itself, so let me start at the obvious place: what is *Oriz*?
+
+**Oriz** is a single-developer open family of 17 npm packages and 26 web apps,
+built by [Chirag Singhal](https://chirag.oriz.in) over the last few years. The
+packages — `@chirag127/astro-chrome`, `@chirag127/astro-data`,
+`@chirag127/omni-publish`, and friends — are the load-bearing furniture. The
+apps — this blog, the [hub](https://oriz.in), the [photo journal](https://photos.oriz.in),
+the [books site](https://books.oriz.in), the [packages catalog](https://packages.oriz.in),
+and twenty-odd more — are what you can actually point at and use. Everything is
+source-available on GitHub, shipped to Cloudflare Pages on the free tier, and
+held together by a tiny set of conventions documented in `AGENTS.md` and
+`knowledge/` bundles inside each repo.
+
+So: why a blog?
+
+Because the rest of the family is, by design, *narrow*. Each app does one
+thing — `photos.oriz.in` shows photos, `books.oriz.in` reviews books, the
+package READMEs document each package. None of those are the right place for
+the *connective tissue*: the engineering essays, the architecture decisions,
+the "here's why I rebuilt this from scratch", the monthly retros, the
+finance-in-India notes that don't fit anywhere else. That's what lives here.
+
+You can expect roughly four kinds of post:
+
+1. **Engineering essays** — Astro 6, Cloudflare Pages, content collections,
+   the bits of the family that are interesting to talk about.
+2. **Architecture decisions** — written-down ADRs for the patterns that
+   recur across the 26 apps (knowledge-first, package-per-concern, the
+   four-host git mirror).
+3. **Tutorials** — practical "how I shipped X on the free tier in an
+   afternoon" walkthroughs.
+4. **Monthly retros** — what shipped, what broke, what got deferred.
+
+If you want the firehose, subscribe via the
+[Substack newsletter](https://oriz.substack.com) or follow the
+[RSS feed](/rss.xml) (Atom and JSON Feed are at `/atom.xml` and `/feed.json`
+respectively — pick your favorite).
+
+## Embeds work here too
+
+This blog is MDX, so posts can drop in components inline. Here's a YouTube
+embed:
+
+<YouTube id="dQw4w9WgXcQ" />
+
+And a fenced code block, rendered through `astro-expressive-code`:
+
+```js
+console.log('hello, oriz')
+```
+
+## Series
+
+This post is part of the `getting-started` series — the running thread on
+how the Oriz family is put together. Head to
+[/series/getting-started](/series/getting-started) for the rest as it lands.
+
+See you in the next post.

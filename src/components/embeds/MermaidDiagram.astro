@@ -1,0 +1,55 @@
+---
+// TODO: move to @chirag127/astro-chrome/embeds in v0.1.6
+/**
+ * <MermaidDiagram> — lazy mermaid.js renderer.
+ *
+ * Wraps a <div class="mermaid">{slot}</div> and lazy-loads the mermaid
+ * ESM bundle the first time any diagram enters the viewport. The slot
+ * should be a fenced mermaid graph definition.
+ */
+---
+
+<div class="mermaid"><slot /></div>
+
+<script>
+  const SRC = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+  const nodes = document.querySelectorAll('.mermaid')
+  if (nodes.length) {
+    const load = async () => {
+      try {
+        const mod = await import(/* @vite-ignore */ SRC)
+        const mermaid = mod.default ?? mod
+        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' })
+        await mermaid.run({ nodes: Array.from(nodes) as HTMLElement[] })
+      } catch {
+        /* ignore — diagrams stay as plain text */
+      }
+    }
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              load()
+              io.disconnect()
+              break
+            }
+          }
+        },
+        { rootMargin: '200px' },
+      )
+      nodes.forEach((n) => io.observe(n))
+    } else {
+      load()
+    }
+  }
+</script>
+
+<style>
+  .mermaid {
+    margin-block: 1.5rem;
+    display: flex;
+    justify-content: center;
+    font-family: var(--font-sans);
+  }
+</style>
