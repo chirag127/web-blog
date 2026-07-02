@@ -23,7 +23,7 @@
   "dependencies": {
     "@astrojs/mdx": "^4.0.0",
     "@astrojs/react": "^5.0.5",
-    "@astrojs/rss": "^4.0.11",
+    "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.2.0",
     "@chirag127/astro-chrome": "^0.1.7",
     "@chirag127/astro-data": "^0.1.1",
