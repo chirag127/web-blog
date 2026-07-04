@@ -1,15 +1,16 @@
 // @ts-check
-import { defineConfig } from 'astro/config'
+
+import mdx from '@astrojs/mdx'
 import react from '@astrojs/react'
 import sitemap from '@astrojs/sitemap'
-import mdx from '@astrojs/mdx'
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'astro/config'
 import expressiveCode from 'astro-expressive-code'
 import pagefind from 'astro-pagefind'
-import tailwindcss from '@tailwindcss/vite'
-import remarkMath from 'remark-math'
-import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import rehypeSlug from 'rehype-slug'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /**
@@ -63,10 +64,7 @@ export default defineConfig({
     react(),
     mdx({
       remarkPlugins: [remarkGfm, remarkMath],
-      rehypePlugins: [
-        rehypeSlug,
-        [rehypeKatex, { strict: 'ignore', output: 'htmlAndMathml' }],
-      ],
+      rehypePlugins: [rehypeSlug, [rehypeKatex, { strict: 'ignore', output: 'htmlAndMathml' }]],
     }),
     sitemap(),
     pagefind(),
@@ -81,10 +79,7 @@ export default defineConfig({
     // warnings emitted when emoji land inside accidental `$...$` math spans
     // (e.g. money tables like `$3.99–$19.99`).
     remarkPlugins: [remarkGfm, remarkMath],
-    rehypePlugins: [
-      rehypeSlug,
-      [rehypeKatex, { strict: 'ignore', output: 'htmlAndMathml' }],
-    ],
+    rehypePlugins: [rehypeSlug, [rehypeKatex, { strict: 'ignore', output: 'htmlAndMathml' }]],
     shikiConfig: { theme: 'github-dark-dimmed' },
   },
   vite: {

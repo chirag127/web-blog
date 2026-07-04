@@ -37,7 +37,9 @@
 [data-oriz-account-heading] {
   font-family: var(--font-display);
   font-weight: 500;
-  font-variation-settings: 'opsz' 60, 'SOFT' 40;
+  font-variation-settings:
+    "opsz" 60,
+    "SOFT" 40;
   font-size: 1.5rem;
   margin: 0 0 1.25rem;
   color: var(--ink);
@@ -225,7 +227,9 @@
   font-family: var(--font-sans);
   color: var(--ink);
 }
-[data-oriz-finish-sign-in-state="done"] { color: var(--cobalt); }
+[data-oriz-finish-sign-in-state="done"] {
+  color: var(--cobalt);
+}
 [data-oriz-finish-sign-in-error] {
   padding: 0.875rem 1.25rem;
   background: color-mix(in oklab, var(--vermilion) 15%, transparent);
@@ -313,8 +317,12 @@ form[data-oriz-contact] {
 }
 
 @keyframes oriz-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-oriz-account-spinner] { animation: none; }
+  [data-oriz-account-spinner] {
+    animation: none;
+  }
 }

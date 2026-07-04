@@ -5,6 +5,5 @@ export const SITE_CONFIG: OrizSiteConfig = {
   name: 'Blog',
   origin: 'https://blog.oriz.in',
   tagline: 'Long-form writing on engineering, finance, and books',
-  description:
-    'Long-form writing on engineering, finance, and books — by Chirag Singhal.',
+  description: 'Long-form writing on engineering, finance, and books — by Chirag Singhal.',
 }

@@ -45,7 +45,10 @@ const blog = defineCollection({
               /* fall through */
             }
           }
-          return trimmed.split(',').map((t) => t.trim()).filter(Boolean)
+          return trimmed
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
         }
         return v
       }, z.array(z.string()))

@@ -1,9 +1,8 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro'
-import { getCategoriesWithCounts, getPublishedPosts, slugifyTag } from '~/lib/blog'
+import { getCategoriesWithCounts, getPublishedPosts } from '~/lib/blog'
 
-const allPosts = await getPublishedPosts()
-const sortedCategories = await getCategoriesWithCounts()
+const _allPosts = await getPublishedPosts()
+const _sortedCategories = await getCategoriesWithCounts()
 ---
 
 <BaseLayout title="Categories — Blog" description="Browse blog posts by category.">

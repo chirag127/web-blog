@@ -1,8 +1,8 @@
-@import 'tailwindcss';
-@import '@fontsource-variable/source-serif-4';
-@import '@fontsource-variable/inter';
-@import '@fontsource/ibm-plex-mono/400.css';
-@import '@fontsource/ibm-plex-mono/500.css';
+@import "tailwindcss";
+@import "@fontsource-variable/source-serif-4";
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
 /*
  * oriz-blog — v0 design tokens (locked brief 2026-06-22).
@@ -36,20 +36,20 @@
     color-scheme: light;
 
     /* ── Locked brief palette ─────────────────────────────────────────── */
-    --color-bg: #FAF8F2;          /* warm bone */
-    --color-fg: #0F1419;          /* ink */
-    --color-accent: #9F2B1C;      /* rust */
-    --color-sage: #6B7F5C;
-    --color-muted: #52606D;
+    --color-bg: #faf8f2; /* warm bone */
+    --color-fg: #0f1419; /* ink */
+    --color-accent: #9f2b1c; /* rust */
+    --color-sage: #6b7f5c;
+    --color-muted: #52606d;
     --color-border: rgba(15, 20, 25, 0.1);
 
     /* Internal token aliases (used across components) */
     --paper: var(--color-bg);
-    --paper-2: #F2EFE6;
+    --paper-2: #f2efe6;
     --ink: var(--color-fg);
     --ink-mute: var(--color-muted);
     --rule: var(--color-border);
-    --cobalt: var(--color-accent);   /* legacy alias → rust now */
+    --cobalt: var(--color-accent); /* legacy alias → rust now */
     --sage: var(--color-sage);
 
     --vermilion: var(--color-accent);
@@ -57,7 +57,7 @@
 
     /* Legacy --color-* used by existing pages */
     --color-bg-soft: var(--paper-2);
-    --color-bg-muted: #EAE6D9;
+    --color-bg-muted: #eae6d9;
     --color-prose: var(--ink);
     --color-fg-muted: var(--ink-mute);
     --color-fg-soft: #7d7e88;
@@ -70,7 +70,9 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
-    font-feature-settings: 'kern' 1, 'liga' 1;
+    font-feature-settings:
+      "kern" 1,
+      "liga" 1;
   }
 
   body {
@@ -85,9 +87,16 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  code, kbd, pre, samp, .mono {
+  code,
+  kbd,
+  pre,
+  samp,
+  .mono {
     font-family: var(--font-mono);
-    font-feature-settings: 'tnum' 1, 'zero' 1, 'calt' 0;
+    font-feature-settings:
+      "tnum" 1,
+      "zero" 1,
+      "calt" 0;
   }
 
   ::selection {
@@ -137,7 +146,9 @@
   padding: 0.5rem 1rem;
   z-index: 100;
 }
-.skip-link:focus { left: 0; }
+.skip-link:focus {
+  left: 0;
+}
 
 /* ── Page-head + prose utility (used by /about, /contact, /legal/*, …) ─ */
 
@@ -155,12 +166,18 @@
   color: var(--ink-mute);
   margin: 0 0 0.875rem;
 }
-.page-head .eyebrow a { color: var(--ink-mute); }
-.page-head .eyebrow a:hover { color: var(--cobalt); }
+.page-head .eyebrow a {
+  color: var(--ink-mute);
+}
+.page-head .eyebrow a:hover {
+  color: var(--cobalt);
+}
 .page-head h1 {
   font-family: var(--font-display);
   font-weight: 380;
-  font-variation-settings: 'opsz' 96, 'SOFT' 50;
+  font-variation-settings:
+    "opsz" 96,
+    "SOFT" 50;
   font-size: clamp(2.25rem, 5vw, 3.25rem);
   line-height: 1.05;
   letter-spacing: -0.005em;
@@ -196,7 +213,9 @@
 .prose h2 {
   font-family: var(--font-display);
   font-weight: 380;
-  font-variation-settings: 'opsz' 60, 'SOFT' 40;
+  font-variation-settings:
+    "opsz" 60,
+    "SOFT" 40;
   font-size: 1.6625rem;
   letter-spacing: -0.005em;
   color: var(--ink);
@@ -205,12 +224,16 @@
 .prose h3 {
   font-family: var(--font-display);
   font-weight: 500;
-  font-variation-settings: 'opsz' 36, 'SOFT' 30;
+  font-variation-settings:
+    "opsz" 36,
+    "SOFT" 30;
   font-size: 1.3125rem;
   color: var(--ink);
   margin: 1.75rem 0 0.625rem;
 }
-.prose p { margin: 0 0 1.25rem; }
+.prose p {
+  margin: 0 0 1.25rem;
+}
 .prose a {
   color: var(--cobalt);
   text-decoration: underline;
@@ -218,10 +241,21 @@
   text-underline-offset: 3px;
   text-decoration-color: color-mix(in oklab, var(--cobalt) 40%, transparent);
 }
-.prose a:hover { text-decoration-color: var(--cobalt); }
-.prose strong { color: var(--ink); font-weight: 600; }
-.prose ul, .prose ol { padding-left: 1.5rem; margin: 0 0 1.25rem; }
-.prose li { margin-bottom: 0.5rem; }
+.prose a:hover {
+  text-decoration-color: var(--cobalt);
+}
+.prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+.prose li {
+  margin-bottom: 0.5rem;
+}
 .prose code {
   font-family: var(--font-mono);
   font-size: 0.875em;
@@ -246,14 +280,18 @@
 
 /* ── KaTeX overrides ─────────────────────────────────────────────────── */
 
-.katex { font-size: 1.05em; }
+.katex {
+  font-size: 1.05em;
+}
 .katex-display {
   margin-block: 1.25rem;
   padding: 0.5rem 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
-.katex-display::-webkit-scrollbar { height: 6px; }
+.katex-display::-webkit-scrollbar {
+  height: 6px;
+}
 .katex-display::-webkit-scrollbar-thumb {
   background: color-mix(in oklab, var(--ink-mute) 30%, transparent);
 }
@@ -270,7 +308,9 @@
   --pagefind-ui-border-radius: 0;
   --pagefind-ui-font: var(--font-serif);
 }
-.pagefind-ui__result-link { color: var(--ink) !important; }
+.pagefind-ui__result-link {
+  color: var(--ink);
+}
 .pagefind-ui__result-excerpt mark {
   background: color-mix(in oklab, var(--cobalt) 25%, transparent);
   color: inherit;
@@ -279,8 +319,12 @@
 
 /* ── expressive-code shell ───────────────────────────────────────────── */
 
-.expressive-code { margin-block: 1.5rem; }
-.expressive-code .frame { background: var(--paper-2); }
+.expressive-code {
+  margin-block: 1.5rem;
+}
+.expressive-code .frame {
+  background: var(--paper-2);
+}
 
 /* ── view-transitions ────────────────────────────────────────────────── */
 

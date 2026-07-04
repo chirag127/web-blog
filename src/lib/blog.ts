@@ -196,9 +196,7 @@ export async function getPostsByYear(): Promise<{ year: number; posts: BlogPost[
     arr.push(p)
     m.set(y, arr)
   }
-  return [...m.entries()]
-    .map(([year, posts]) => ({ year, posts }))
-    .sort((a, b) => b.year - a.year)
+  return [...m.entries()].map(([year, posts]) => ({ year, posts })).sort((a, b) => b.year - a.year)
 }
 
 /** Format a date as "DD MMM YYYY" (e.g. "19 Jun 2026"). */

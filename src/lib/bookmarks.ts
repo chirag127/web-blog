@@ -10,6 +10,7 @@
  * module — never touch localStorage / Firestore directly elsewhere.
  */
 
+import { onAuthStateChanged, type User } from 'firebase/auth'
 import {
   collection,
   deleteDoc,
@@ -22,7 +23,6 @@ import {
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { onAuthStateChanged, type User } from 'firebase/auth'
 import { auth, db } from './firebase'
 
 export interface Bookmark {
@@ -111,10 +111,7 @@ export async function listBookmarks(user: User | null): Promise<Bookmark[]> {
  * Subscribe to bookmark updates. Returns an unsubscribe.
  * For anon users this is a one-shot read (bookmarks are tab-local).
  */
-export function watchBookmarks(
-  user: User | null,
-  cb: (items: Bookmark[]) => void,
-): Unsubscribe {
+export function watchBookmarks(user: User | null, cb: (items: Bookmark[]) => void): Unsubscribe {
   if (user) {
     const q = query(userBookmarksCol(user.uid), orderBy('savedAt', 'desc'))
     return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as Bookmark)))

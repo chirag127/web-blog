@@ -40,8 +40,7 @@ const env = (key: string, fallback = ''): string => {
 
 export const SITE_CONFIG: BlogConfig = {
   title: 'Blog — oriz',
-  description:
-    'Long-form writing on engineering, finance, and books — by Chirag Singhal.',
+  description: 'Long-form writing on engineering, finance, and books — by Chirag Singhal.',
   url: 'https://blog.oriz.in',
   defaultLocale: 'en',
   author: {
@@ -56,7 +55,7 @@ export const SITE_CONFIG: BlogConfig = {
     email: 'whyiswhen@gmail.com',
   },
   giscus: {
-    repo: (env('PUBLIC_GISCUS_REPO', 'chirag127/oriz-blog') as `${string}/${string}`),
+    repo: env('PUBLIC_GISCUS_REPO', 'chirag127/oriz-blog') as `${string}/${string}`,
     repoId: env('PUBLIC_GISCUS_REPO_ID'),
     category: env('PUBLIC_GISCUS_CATEGORY', 'General'),
     categoryId: env('PUBLIC_GISCUS_CATEGORY_ID'),

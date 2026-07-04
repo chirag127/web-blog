@@ -1,12 +1,4 @@
 ---
-/**
- * Re-export shim — the blog/* nested routes import BaseLayout from
- * ~/components/layout/BaseLayout.astro. The canonical layout lives at
- * ~/layouts/BaseLayout.astro; this shim forwards to it 1:1 so we don't
- * have to rewrite every nested route import.
- */
-import Base from '~/layouts/BaseLayout.astro'
-
 interface Props {
   title?: string
   description?: string
@@ -20,7 +12,7 @@ interface Props {
   hideSidebar?: boolean
 }
 
-const props = Astro.props as Props
+const _props = Astro.props as Props
 ---
 
 <Base {...props}><slot /></Base>

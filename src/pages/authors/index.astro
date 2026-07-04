@@ -1,16 +1,10 @@
 ---
-/**
- * /authors — list every distinct author across the blog with a count.
- * Almost everything on this blog is by Chirag, but the schema permits
- * other authors and the route honors them.
- */
-import BaseLayout from '~/layouts/BaseLayout.astro'
-import { getAuthorsWithCounts, slugifyTag } from '~/lib/blog'
+import { getAuthorsWithCounts } from '~/lib/blog'
 import { SITE_CONFIG } from '~/lib/config'
 
-const authors = await getAuthorsWithCounts()
+const _authors = await getAuthorsWithCounts()
 
-const jsonLd = {
+const _jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
   name: 'Authors',

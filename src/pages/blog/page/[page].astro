@@ -1,4 +1,5 @@
 ---
+import type { CollectionEntry } from 'astro:content'
 /**
  * /blog/page/[page] — pages 2+ of the paginated blog index.
  * Page 1 lives at /blog/ (see ../index.astro).
@@ -7,17 +8,9 @@
  * for it stays /blog/ (avoids /blog/page/1 duplicates).
  */
 import type { GetStaticPaths, Page } from 'astro'
-import type { CollectionEntry } from 'astro:content'
-import BaseLayout from '~/components/layout/BaseLayout.astro'
-import PostCard from '~/components/blog/PostCard.astro'
-import {
-  getAllCategories,
-  getPublishedPosts,
-  slugifyTag,
-} from '~/lib/blog'
-import { SITE_CONFIG } from '~/lib/config'
+import { getAllCategories, getPublishedPosts } from '~/lib/blog'
 
-const PAGE_SIZE = 12
+const _PAGE_SIZE = 12
 
 export const getStaticPaths = (async ({ paginate }) => {
   const pageSize = 12
@@ -31,13 +24,13 @@ interface PageProps {
   page: Page<CollectionEntry<'blog'>>
 }
 const { page } = Astro.props as PageProps
-const categories = await getAllCategories()
+const _categories = await getAllCategories()
 
-const prevHref = page.currentPage === 2 ? '/blog/' : page.url.prev
-const nextHref = page.url.next
+const _prevHref = page.currentPage === 2 ? '/blog/' : page.url.prev
+const _nextHref = page.url.next
 
-const title = `Blog — page ${page.currentPage}`
-const description = `Page ${page.currentPage} of writing on software, AI agents, finance tooling, and the tools I build.`
+const _title = `Blog — page ${page.currentPage}`
+const _description = `Page ${page.currentPage} of writing on software, AI agents, finance tooling, and the tools I build.`
 ---
 
 <BaseLayout title={title} description={description} canonical={new URL(page.url.current, SITE_CONFIG.url).toString()}>
