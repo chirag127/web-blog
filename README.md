@@ -1,5 +1,7 @@
 # Oriz Pages — Blog
 
+[![GitHub stars](https://img.shields.io/github/stars/chirag127/blog?style=social)](https://github.com/chirag127/blog/stargazers)
+
 > Long-form writing on engineering, finance, and books — the blog of the oriz family.
 
 **Live at**: https://blog.oriz.in · **Status**: production
