@@ -1,0 +1,124 @@
+---
+title: "Hermes Agent and OpenClaw: what they actually are (2026)"
+description: "Part 1 of 2 — Before comparing Hermes Agent and OpenClaw to Claude Code and OpenCode, you need to know what they actually are. Deep-research findings from 100 agents, primary sources only."
+pubDate: 2026-07-08
+author: "Chirag Singhal"
+tags: ["ai-agents", "hermes-agent", "openclaw", "nous-research", "coding-agents", "deep-research"]
+canonicalUrl: "https://blog.oriz.in/posts/hermes-openclaw-deep-dive/"
+series: "AI Agent Comparison 2026"
+seriesPart: 1
+---
+
+Before you can compare Hermes Agent and OpenClaw to Claude Code and OpenCode,
+you need to know what they actually are. Most comparison posts get this wrong.
+This one is based on a deep-research pass — 100 agents, primary sources only,
+adversarial verification. Here is what the research found.
+
+## Hermes Agent is NOT the NousResearch LLM demo
+
+This is the most common mistake. There are **two completely different NousResearch
+projects** that both have "Hermes" in the name:
+
+| Project | What it is | Stars |
+|---|---|---|
+| `NousResearch/hermes-agent` | Terminal agent CLI | **210K** |
+| `NousResearch/Hermes-Function-Calling` | Python Jupyter notebook demo | 1,416 |
+
+Every AI comparison that dismisses "Hermes" as "just a Python script" is looking
+at the wrong repo.
+
+### What Hermes Agent actually is
+
+[`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent),
+last pushed 2026-07-07:
+
+- **Terminal agent CLI** — a real binary you install and run in your terminal
+- **MCP integration** — connect any MCP server for extended capabilities (same
+  `.mcp.json`-style ecosystem as Claude Code and OpenCode)
+- **Skills system** — `/skills` command, compatible with agentskills.io
+- **Memory/learning loop** — Honcho dialectic user modelling + FTS5 full-text
+  session search across past interactions
+- **Multi-platform messaging** — Telegram, Discord, Slack, WhatsApp, Signal, Email
+- **Windows** — PowerShell installer
+- **`hermes-cli-mcp`** (npm v1.0.1, 2026-05-22) — MCP server that wraps the
+  Hermes CLI binary, confirming a real standalone binary exists
+
+Hermes Agent is **general-purpose** rather than coding-first. It covers coding
+as one of many capabilities alongside its messaging and memory features.
+
+### Hermes Studio — the management UI (separate project)
+
+[`EKKOLearnAI/hermes-studio`](https://github.com/EKKOLearnAI/hermes-studio) is an
+Electron desktop app / web dashboard / Docker console for managing Hermes Agent.
+It explicitly supports "dedicated proxy routes for Codex and Claude Code
+integrations" — meaning you can launch Claude Code from inside Hermes Studio.
+This is the management plane; Hermes Agent is the agent runtime.
+
+---
+
+## OpenClaw: messaging gateway with an agent loop inside
+
+[`openclaw/openclaw`](https://github.com/openclaw/openclaw), npm `openclaw`
+v2026.6.11:
+
+> "OpenClaw is a personal AI assistant you run on your own devices. It answers
+> you on the channels you already use."
+
+### The messaging side
+
+OpenClaw routes any AI provider through 20+ messaging platforms:
+WhatsApp, Slack, Telegram, Discord, LINE, Matrix, and more. Runtime dependencies
+confirm this is its core architecture:
+`@whiskeysockets/baileys` (WhatsApp), `@slack/bolt` (Slack), `grammy` (Telegram),
+`discord-api-types` (Discord), `@line/bot-sdk` (LINE). iOS and Android app targets
+(`ai.openclaw.ios`, `ai.openclaw.android`) confirm mobile-first thinking.
+
+### The agent loop side (the part people miss)
+
+OpenClaw also has a skills system, memory files (MEMORY.md, USER.md, SOUL.md),
+and an agent configuration system. The strongest evidence: **Hermes Agent has a
+`hermes claw migrate` command** specifically to import from `~/.openclaw`:
+
+> "If you're coming from OpenClaw, Hermes can automatically import your settings,
+> memories, skills, and API keys."
+
+Items migrated: SOUL.md, Memories, Skills, Command allowlist, Messaging settings,
+API keys, AGENTS.md.
+
+This means OpenClaw has enough agent infrastructure that migrating from it to
+another agent is a first-class workflow.
+
+### cc-switch treats it as a peer
+
+[`farion1231/cc-switch`](https://github.com/farion1231/cc-switch) — the
+all-in-one coding agent manager — has a dedicated `src/components/openclaw/`
+directory and Workspace editor feature, treating OpenClaw as a peer to Claude Code
+and OpenCode.
+
+### AionUi does NOT list Hermes Agent
+
+Verified by direct fetch: AionUi's agent pill list includes OpenClaw but not
+Hermes Agent. The pills are: Claude Code, Codex, Copilot, Goose, OpenCode,
+Gemini CLI, OpenClaw, Aion CLI, Kimi CLI. Hermes is absent.
+
+---
+
+## Summary: what they are
+
+| | Hermes Agent | OpenClaw |
+|---|---|---|
+| **Category** | General-purpose terminal agent | Personal AI + messaging gateway |
+| **Coding** | ✅ (one of many capabilities) | ❌ not primary |
+| **Messaging** | ✅ 6+ platforms | ✅ 20+ platforms |
+| **MCP** | ✅ | ⚠️ not documented as primary |
+| **Skills** | ✅ agentskills.io | ✅ own system |
+| **Memory** | ✅ Honcho + FTS5 | ✅ MEMORY/USER/SOUL |
+| **Stars** | 210K | moderate |
+
+Neither is what AI roundups say they are. Hermes Agent is a real, large, actively
+maintained terminal agent. OpenClaw is a messaging gateway that also has agent
+infrastructure — and Hermes Agent can migrate from it.
+
+---
+
+*Part 2 of this series: [Hermes Agent vs OpenClaw vs Claude Code vs OpenCode — pick the right tool](/posts/hermes-openclaw-vs-claude-code-pick/)*
