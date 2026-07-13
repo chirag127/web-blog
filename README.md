@@ -49,7 +49,7 @@ Everything else (Firebase, Web3Forms, GA4, AdSense) is in the family-wide set at
 
 ```bash
 # from the workspace root (c:/D/oriz)
-pnpm -F @chirag127/oriz-blog dev
+pnpm dev
 ```
 
 ## Knowledge
